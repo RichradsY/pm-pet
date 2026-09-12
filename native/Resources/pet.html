@@ -37,7 +37,6 @@
 #pm-pet-desktop .pp-question{background:var(--pp-warm);border-radius:10px;padding:10px;margin-top:12px}
 #pm-pet-desktop .pp-question p{font-size:13px;margin:0 0 8px;line-height:1.5}
 #pm-pet-desktop .pp-question-label{display:block;font-size:11px;font-weight:500;margin-bottom:5px;color:var(--pp-ink)}
-#pm-pet-desktop .pp-panel[data-waiting=true] [data-status]{color:var(--pp-mid)}
 #pm-pet-desktop .pp-return{width:100%;padding:7px 10px;border:1px solid var(--pp-line);border-radius:7px;background:var(--pp-paper);font-size:12px}
 #pm-pet-desktop .pp-settings{margin-top:12px;padding-top:9px;border-top:1px solid var(--pp-line)}
 #pm-pet-desktop .pp-settings summary{font-size:12px;color:var(--pp-muted);cursor:pointer;width:fit-content}
@@ -190,14 +189,38 @@
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent;color-scheme:light dark}
 #pm-pet-desktop{width:100%;height:100%;background:transparent;--pp-accent:#638f7c;--pp-accent-bg:#e1eee5;--pp-ink:light-dark(#263a31,#edf6ef);--pp-muted:light-dark(#52665a,#c0d1c5);--pp-line:light-dark(#34553e26,#def6e229);--pp-glass-wash:light-dark(#f7fcf940,#20352b36);--pp-glass-edge:light-dark(#ffffff91,#e0f2e424);--pp-glass-highlight:light-dark(#ffffff66,#e1f2e510);--pp-glass-shadow:light-dark(#1b382016,#06100b38)}
 #pm-pet-desktop [data-surface]{height:100%;position:relative}
-#pm-pet-desktop .pp-pet{left:calc(50% - 46px);top:14px;bottom:auto;outline-offset:2px;transform-origin:top center}
+#pm-pet-desktop .pp-pet{left:calc(50% - 46px);top:38px;bottom:auto;outline-offset:2px;transform-origin:top center}
 #pm-pet-desktop .pp-owl{box-shadow:inset -3px -2px 0 var(--pp-wing)}
 #pm-pet-desktop .pp-shadow{display:none}
 #pm-pet-desktop .pp-pet:focus-visible{outline:2px solid var(--pp-accent)}
 #pm-pet-desktop .native-name,#pm-pet-desktop .native-quota .pp-usage-row,#pm-pet-desktop .native-quota .pp-unavailable,#pm-pet-desktop .pp-panel{background:var(--pp-glass-wash);border:1px solid var(--pp-glass-edge);box-shadow:inset 0 1px 0 var(--pp-glass-highlight),0 3px 8px var(--pp-glass-shadow)}
 #pm-pet-desktop .native-name{position:absolute;left:50%;transform:translateX(-50%);width:max-content;max-width:calc(100% - 20px);text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;top:120px;font-size:11px;line-height:16px;padding:2px 9px;border-radius:10px;color:var(--pp-ink)}
 #pm-pet-desktop .native-name::before{content:"";display:inline-block;width:5px;height:5px;margin:0 5px 1px 0;border-radius:50%;background:var(--pp-accent)}
-#pm-pet-desktop .native-needs{position:absolute;z-index:3;top:0;left:50%;transform:translateX(-50%);font-size:10px;white-space:nowrap;background:light-dark(#fff0ca8c,#49371699);color:light-dark(#654410,#ffe3a3);border:1px solid light-dark(#d99c4033,#efc36d40);border-radius:12px;padding:1px 7px;cursor:pointer}
+#pm-pet-desktop .native-needs{position:absolute;z-index:3;top:6px;left:50%;transform:translateX(-50%);font-size:10px;white-space:nowrap;background:light-dark(#fff0ca8c,#49371699);color:light-dark(#654410,#ffe3a3);border:1px solid light-dark(#d99c4033,#efc36d40);border-radius:12px;padding:1px 7px;cursor:pointer}
+#pm-pet-desktop .native-needs[data-kind=input]{background:light-dark(#ffe5de99,#512e2b99);color:light-dark(#953b31,#ffb6a7);border-color:light-dark(#c7523e38,#f28d7d40)}
+#pm-pet-desktop .native-roadmap{position:absolute;top:4px;left:50%;transform:translateX(-50%);display:flex;align-items:center;justify-content:center;gap:1px;width:max-content;max-width:calc(100% - 12px);height:28px;z-index:3;--dot-done:#79b990;--dot-current:#246947;--dot-pending:#b0bab4;--dot-decision:#e7b64e;--dot-input:#d35b52}
+#pm-pet-desktop .mini-step{display:grid;place-items:center;flex:none;width:17px;height:26px;border:0;border-radius:6px;background:transparent;padding:0;cursor:pointer}
+#pm-pet-desktop .mini-dot{display:block;width:8px;height:8px;border-radius:50%;background:var(--dot-pending);box-shadow:inset 0 0 0 1px #35513e19;pointer-events:none}
+#pm-pet-desktop .mini-step[data-status=done] .mini-dot{background:var(--dot-done)}
+#pm-pet-desktop .mini-step[data-status=current] .mini-dot{background:var(--dot-current);outline:1px solid var(--dot-current);outline-offset:2px}
+#pm-pet-desktop .mini-step[data-status=decision] .mini-dot{background:var(--dot-decision);outline:1px solid var(--dot-decision);outline-offset:2px}
+#pm-pet-desktop .mini-step[data-status=input] .mini-dot{background:var(--dot-input);outline:1px solid var(--dot-input);outline-offset:2px}
+#pm-pet-desktop .mini-step[data-status=review] .mini-dot{background:transparent;box-shadow:inset 0 0 0 2px var(--dot-current)}
+#pm-pet-desktop .mini-overflow{width:auto;min-width:20px;padding:0 2px;font-size:9px;font-variant-numeric:tabular-nums;color:var(--pp-muted)}
+#pm-pet-desktop .mini-step:hover{background:light-dark(#34583c0c,#d8f4df13)}
+#pm-pet-desktop .mini-step:focus-visible{outline:2px solid var(--pp-accent);outline-offset:-1px}
+#pm-pet-desktop .native-roadmap.is-celebrating .mini-dot{animation:pp-dot-orbit .72s cubic-bezier(.22,1,.36,1) calc(var(--dot-index,0)*35ms) both}
+#pm-pet-desktop .pp-pet[data-attention=input] .pp-lantern{--pp-gold:light-dark(#cf5b52,#ec8b7d);--pp-chick:light-dark(#ffc4b6,#f4b6ac)}
+#pm-pet-desktop .pp-panel[data-attention=input] .pp-question{background:light-dark(#d5664b14,#ee937d12);border-color:light-dark(#bd52422e,#ed998033)}
+#pm-pet-desktop .pp-panel[data-attention=input] .pp-question-label{color:light-dark(#9a4036,#f2a599)}
+#pm-pet-desktop .pp-panel[data-attention=input] .pp-progress-fill{background:var(--pp-low)}
+#pm-pet-desktop .native-input-hint{font-size:11px;line-height:1.45;color:var(--pp-muted);margin:0 0 9px}
+#pm-pet-desktop .pp-step[data-status=current]{color:var(--pp-green)}
+#pm-pet-desktop .pp-step[data-status=decision]{color:var(--pp-mid)}
+#pm-pet-desktop .pp-step[data-status=input]{color:var(--pp-low)}
+@keyframes pp-dot-orbit{0%,100%{transform:translate(0,0)}20%{transform:translate(0,-3px)}40%{transform:translate(3px,0)}60%{transform:translate(0,3px)}80%{transform:translate(-3px,0)}}
+@media(prefers-color-scheme:dark){#pm-pet-desktop .native-roadmap{--dot-done:#8fc6a1;--dot-current:#3e966b;--dot-pending:#8d9e92}}
+@media(prefers-reduced-motion:reduce){#pm-pet-desktop .native-roadmap .mini-dot{animation:none!important}}
 #pm-pet-desktop .native-more{position:absolute;bottom:10px;left:7px;font-size:9px;background:var(--pp-paper);border-radius:6px;padding:0 3px;pointer-events:none}
 #pm-pet-desktop .native-quota{position:absolute;left:6px;right:6px;bottom:3px;text-align:center}
 #pm-pet-desktop .native-quota .pp-usage-row{width:max-content;max-width:100%;gap:6px;flex-wrap:nowrap;align-items:center;margin:0 auto;padding:3px 7px;border-radius:10px}
@@ -229,6 +252,7 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent
 #pm-pet-desktop .pp-children-paused .pp-baby,#pm-pet-desktop .pp-children-paused .pp-baby *{animation-play-state:paused!important}
 </style></head><body><div id="pm-pet-desktop">
 <section data-surface="owl">
+<div class="native-roadmap" role="group" aria-label="Roadmap overview" hidden></div>
 <button class="native-needs" hidden>Needs you</button>
 <button class="pp-pet" type="button" aria-label="Toggle progress. Drag to move. Double-click to return to Codex." aria-expanded="false" aria-controls="pm-pet-progress-panel">
     <span class="pp-shadow" aria-hidden="true"></span>
@@ -251,7 +275,7 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent
 <div class="pp-title"></div><div class="native-no-plan">No roadmap reported</div>
 <div class="pp-progress" hidden><div class="pp-progress-meta"><span class="pp-progress-count"></span><span class="pp-progress-percent"></span></div><div class="pp-progress-track" role="progressbar" aria-label="Roadmap completion" aria-valuemin="0" aria-valuemax="100"><span class="pp-progress-fill"></span></div></div>
 <details class="pp-road" hidden><summary>View roadmap</summary><ol></ol></details>
-<div class="pp-question" hidden><span class="pp-question-label">Your decision</span><p></p><button class="pp-return">Answer in Codex ↗</button></div>
+<div class="pp-question" hidden><span class="pp-question-label">Your decision</span><p></p><div class="native-input-hint" hidden></div><button class="pp-return">Answer in Codex ↗</button></div>
 <div class="native-panel-footer"><span class="native-source"></span><button class="native-menu" aria-label="Pet settings">•••</button></div>
 </div></section></div>
 <script>
@@ -264,22 +288,66 @@ root.querySelectorAll('[data-surface]').forEach(e=>e.hidden=e.dataset.surface!==
 const send=body=>window.webkit?.messageHandlers?.pet?.postMessage(body);
 const owl=$('.pp-pet');
 const themes={sage:['#638f7c','#e1eee5','#80a88f','#86ad95'],sky:['#628faf','#deebf5','#83a4bd','#8faec5'],lilac:['#9b7baf','#efe6f6','#aa92b7','#b49fc0'],rose:['#b27889','#f6e4e9','#c38e8c','#c99b99'],sand:['#aa8960','#f3eada','#b89a72','#c7a981']};
-let priorDone=null,priorID=null,magicTimer=null,currentPet=null,clickTimer=null;
+let priorPet=null,magicTimer=null,currentPet=null,clickTimer=null,miniSignature='';
 const childSlots=Array.from(root.querySelectorAll('.pp-baby'),el=>({el,id:null,timer:null,remaining:0,startedAt:0,complete:null}));
 let childrenPaused=false;
 function text(selector,value){$(selector).textContent=value??''}
 function observedDate(value){if(value===null||value===undefined||value==='')return null;const d=new Date(typeof value==='number'?(value<1e12?value*1000:value):value);return Number.isNaN(d.getTime())?null:d;}
 function dateText(value){const d=observedDate(value);return d?d.toLocaleDateString('en-GB',{month:'short',day:'numeric'})+' '+d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'';}
 function dateTooltip(value){return observedDate(value)?.toISOString()||'';}
+/* PET_STATE_START */
+function attentionKind(p){return p.question?(p.question.kind==='input'?'input':'decision'):null;}
+function completedTransitions(previous,next){
+ if(!previous||previous.id!==next.id||previous.generation!==next.generation||next.question||next.roadmapNeedsUpdate)return [];
+ const before=new Map((previous.steps||[]).map(step=>[step.id,step.done]));
+ return (next.steps||[]).filter(step=>step.done&&before.get(step.id)===false).map(step=>step.id);
+}
+function roadmapState(p,limit=7){
+ const steps=Array.isArray(p.steps)?p.steps:[];
+ const pending=steps.filter(step=>!step.done);
+ const candidate=pending.find(step=>step.id===p.currentStepId)||pending.find(step=>step.label===p.currentStep)||pending[0];
+ const blocked=p.question?(pending.find(step=>step.id===p.question.stepId)||candidate):null;
+ const working=['planning','building','running','checking'].includes(p.phase)&&!['disconnected','unavailable','error'].includes(p.sourceStatus);
+ const current=!p.roadmapNeedsUpdate&&!p.question&&working?candidate:null;
+ const all=steps.map((step,index)=>({...step,index,status:step.done?'done':step.id===blocked?.id?attentionKind(p):step.id===current?.id?'current':'pending'}));
+ const focus=blocked||candidate;
+ const focusIndex=focus?steps.findIndex(step=>step.id===focus.id):Math.max(0,steps.length-1);
+ const start=Math.max(0,Math.min(focusIndex-Math.floor(limit/2),steps.length-limit));
+ return {all,visible:all.slice(start,start+limit),before:start,after:Math.max(0,all.length-start-limit),reviewing:!!p.roadmapNeedsUpdate};
+}
+function compactRoadmap(p){
+ const model=roadmapState(p),kind=attentionKind(p);
+ if(kind&&!model.visible.some(step=>step.status===kind))return {...model,visible:[{id:'attention',label:p.question.text,status:kind}],before:0,after:0};
+ if(model.reviewing&&!kind)return {...model,visible:[{id:'review',label:'Reviewing your new request',status:'review'}],before:0,after:0};
+ return model;
+}
+/* PET_STATE_END */
 function activity(p){return p.question?'attention':['unavailable','disconnected','error'].includes(p.sourceStatus)?'idle':({waiting:'attention',paused:'idle',building:'reading',running:'reading',planning:'reading',checking:'reading',complete:'complete',completed:'complete'}[p.phase]||'idle');}
 function updateAnimation(p){
- const next=activity(p);const done=Number.isFinite(p.progress?.done)?p.progress.done:null;
- if(priorID!==p.id){clearTimeout(magicTimer);magicTimer=null;}
- if(next==='attention'){clearTimeout(magicTimer);magicTimer=null;owl.dataset.activity=next;}
- else if(priorID===p.id&&done!==null&&priorDone!==null&&done>priorDone){clearTimeout(magicTimer);owl.dataset.activity='magic';magicTimer=setTimeout(()=>{owl.dataset.activity=activity(currentPet);magicTimer=null},1250);}
+ const next=activity(p);const completed=completedTransitions(priorPet,p);const mini=$('.native-roadmap');
+ if(priorPet?.id!==p.id||priorPet?.generation!==p.generation){clearTimeout(magicTimer);magicTimer=null;mini.classList.remove('is-celebrating');}
+ if(next==='attention'||p.roadmapNeedsUpdate){clearTimeout(magicTimer);magicTimer=null;owl.dataset.activity=next;mini.classList.remove('is-celebrating');}
+ else if(completed.length){clearTimeout(magicTimer);owl.dataset.activity='magic';mini.classList.remove('is-celebrating');requestAnimationFrame(()=>{if(currentPet&&!currentPet.question&&!currentPet.roadmapNeedsUpdate&&magicTimer)mini.classList.add('is-celebrating')});magicTimer=setTimeout(()=>{owl.dataset.activity=activity(currentPet);mini.classList.remove('is-celebrating');magicTimer=null},1250);}
  else if(!magicTimer)owl.dataset.activity=next;
  owl.classList.toggle('pp-attention',next==='attention');owl.classList.toggle('pp-planning',next==='planning');owl.classList.toggle('pp-checking',next==='checking');
- priorDone=done;priorID=p.id;
+ priorPet={id:p.id,generation:p.generation,steps:(p.steps||[]).map(step=>({id:step.id,done:step.done}))};
+}
+function renderMini(p,panelVisible){
+ const row=$('.native-roadmap');row.hidden=!!panelVisible;
+ const model=compactRoadmap(p),kind=attentionKind(p);
+ const items=model.visible;
+ const signature=JSON.stringify([items,model.before,model.after,model.reviewing,kind]);
+ if(signature===miniSignature)return;miniSignature=signature;row.replaceChildren();
+ const names={done:'Completed',current:'In progress',pending:'Not started',decision:'Feedback needed',input:'Information needed',review:'Reviewing request'};
+ function button(label,status,index,overflow){
+  const b=document.createElement('button');b.type='button';b.className='mini-step'+(overflow?' mini-overflow':'');b.dataset.status=status;b.title=label+' · Open roadmap';b.setAttribute('aria-label',b.title);b.style.setProperty('--dot-index',index);
+  if(overflow)b.textContent=overflow;else{const dot=document.createElement('span');dot.className='mini-dot';dot.setAttribute('aria-hidden','true');b.append(dot)}
+  b.onclick=()=>send({action:'togglePanel'});row.append(b);
+ }
+ if(model.before&&!model.reviewing)button(model.before+' earlier steps','pending',0,'+'+model.before);
+ items.forEach((step,index)=>button((step.index===undefined?'':'Step '+(step.index+1)+': ')+step.label+' — '+names[step.status],step.status,index));
+ if(!items.length)button('No roadmap reported','pending',0);
+ if(model.after&&!model.reviewing)button(model.after+' later steps','pending',0,'+'+model.after);
 }
 function startChildTimer(slot){
  if(childrenPaused||!slot.complete||slot.timer!==null)return;
@@ -366,21 +434,25 @@ window.addEventListener('resize',measure);
 window.renderPet=function(data){
  const p=data.pet||{};currentPet=p;
  const colors=themes[p.theme]||themes.sage;root.style.setProperty('--pp-accent',colors[0]);root.style.setProperty('--pp-accent-bg',colors[1]);root.style.setProperty('--pp-fur','light-dark('+colors[2]+','+colors[3]+')');
- const scale=Math.max(.75,Math.min(1.5,(Number(p.size)||100)/100));owl.style.transform='scale('+scale+')';$('.native-name').style.top=(104*scale+15)+'px';
+ const scale=Math.max(.75,Math.min(1.5,(Number(p.size)||100)/100));const inset=Number(data.topInset)||24;owl.style.transform='scale('+scale+')';owl.style.top=(14+inset)+'px';$('.native-name').style.top=(104*scale+15+inset)+'px';
  $('.native-name').textContent=p.title||'Codex conversation';$('.native-name').title=p.title||'Codex conversation';
- owl.setAttribute('aria-expanded',String(!!data.panelVisible));$('.native-needs').hidden=!p.question&&p.phase!=='waiting';
- updateAnimation(p);renderChildren(p);quota(data.quota,p);
+ const kind=attentionKind(p);owl.dataset.attention=kind||'';$('.native-needs').dataset.kind=kind||'';
+ owl.setAttribute('aria-expanded',String(!!data.panelVisible));$('.native-needs').hidden=!kind||!data.panelVisible;text('.native-needs',kind==='input'?'Input needed':'Feedback needed');
+ renderMini(p,data.panelVisible);updateAnimation(p);renderChildren(p);quota(data.quota,p);
  text('.native-title',p.title||'Codex conversation');
  const reviewing=!!p.roadmapNeedsUpdate;
- text('.native-phase',p.question?'Needs you':reviewing?'Planning':({building:'Building',running:'Building',planning:'Planning',checking:'Checking',waiting:'Needs you',complete:'Complete',completed:'Complete',idle:'Idle',paused:'Paused',error:'Source error'}[p.phase]||'Connected'));
+ text('.native-phase',kind==='input'?'Input needed':kind?'Feedback needed':reviewing?'Planning':({building:'Building',running:'Building',planning:'Planning',checking:'Checking',waiting:'Needs you',complete:'Complete',completed:'Complete',idle:'Idle',paused:'Paused',error:'Source error'}[p.phase]||'Connected'));
  text('.pp-title',reviewing?'Reviewing your new request':p.currentStep||'');$('.pp-title').hidden=!reviewing&&!p.currentStep;
  const progress=p.progress;const known=!reviewing&&progress&&Number.isFinite(progress.done)&&Number.isFinite(progress.total)&&progress.total>0;
  $('.native-no-plan').hidden=!!known;$('.pp-progress').hidden=!known;
  text('.native-no-plan',reviewing?'Updating the roadmap before showing new progress.':'No roadmap reported');
  if(known){const percent=Math.round(Math.min(100,Math.max(0,100*progress.done/progress.total)));text('.pp-progress-count',progress.done+' of '+progress.total+' steps done');text('.pp-progress-percent',percent+'%');$('.pp-progress-fill').style.width=percent+'%';$('.pp-progress-track').setAttribute('aria-valuenow',String(percent));}
  const steps=Array.isArray(p.steps)?p.steps:[];$('.pp-road').hidden=!steps.length;text('.pp-road summary',reviewing?'Previous roadmap':'View roadmap');const ol=$('.pp-road ol');ol.replaceChildren();
- steps.forEach(step=>{const li=document.createElement('li');li.className='pp-step';li.dataset.status=step.done?'done':'pending';const mark=document.createElement('span');mark.className='pp-step-mark';mark.textContent=step.done?'✓':'○';const label=document.createElement('span');label.textContent=step.label||'';li.append(mark,label);ol.append(li)});
- $('.pp-question').hidden=!p.question;text('.pp-question p',p.question?.text||'');$('.pp-panel').dataset.waiting=String(!!p.question);
+ roadmapState(p).all.forEach(step=>{const li=document.createElement('li');li.className='pp-step';li.dataset.status=step.status;const mark=document.createElement('span');mark.className='pp-step-mark';mark.textContent=({done:'✓',current:'›',decision:'?',input:'!'})[step.status]||'○';const label=document.createElement('span');label.textContent=step.label||'';li.append(mark,label);ol.append(li)});
+ $('.pp-question').hidden=!p.question;text('.pp-question p',p.question?.text||'');$('.pp-panel').dataset.waiting=String(!!p.question);$('.pp-panel').dataset.attention=kind||'';
+ const destination=p.question?.destination||'codex';text('.pp-question-label',kind==='input'?'Information needed':'Your decision');
+ $('.native-input-hint').hidden=kind!=='input'||destination==='codex';text('.native-input-hint',destination==='system'?'Input location · System window':'Input location · Terminal');
+ text('.pp-return',kind==='input'?(destination==='codex'?'Provide info in Codex ↗':'Open Codex ↗'):'Answer in Codex ↗');
  const stamp=dateText(p.sourceUpdatedAt);const status=['disconnected','connecting'].includes(p.sourceStatus)?'Waiting for Codex':p.sourceStatus==='stale'?'Last reported state':['error','unavailable'].includes(p.sourceStatus)?'Source unavailable':['connected','reported'].includes(p.sourceStatus)?'From Codex':'Awaiting update';
  text('.native-source',status+(stamp?' · '+stamp:''));$('.native-source').title=dateTooltip(p.sourceUpdatedAt);measure();
 };

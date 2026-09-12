@@ -225,8 +225,9 @@ final class PetSurface: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
 }
 
 final class PetWindowController {
+    private static let topInset: CGFloat = 24
     let id: String
-    let owl = PetSurface(kind: "owl", size: NSSize(width: 208, height: 176))
+    let owl = PetSurface(kind: "owl", size: NSSize(width: 208, height: 200))
     let panel = PetSurface(kind: "panel", size: NSSize(width: 320, height: 280))
     var pet: [String: Any] = [:]
     var panelVisible = false
@@ -260,8 +261,12 @@ final class PetWindowController {
 
     func update(pet: [String: Any], state: [String: Any]) {
         self.pet = pet
-        let height = ceil(104 * CGFloat(sizePercent) / 100) + 38 + (quotaVisible ? 54 : 0)
-        let width = max(180, ceil(132 * CGFloat(sizePercent) / 100) + 36)
+        // The fixed band lets compact progress controls appear without moving
+        // the owl: HTML shifts its top coordinates by the same topInset.
+        let height = ceil(104 * CGFloat(sizePercent) / 100) + 38 + Self.topInset + (quotaVisible ? 54 : 0)
+        // Keep the small Pet compact while giving enlarged chicks room to
+        // hatch and grow at either edge of their parent owl.
+        let width = max(180, ceil(132 * CGFloat(sizePercent) / 100) + 48)
         var frame = owl.window.frame
         frame.size = NSSize(width: width, height: height)
         if dragOrigin == nil, let position = pet["position"] as? [String: Any], let x = position["x"] as? Double, let y = position["y"] as? Double, x.isFinite, y.isFinite {
@@ -275,7 +280,7 @@ final class PetWindowController {
         owl.window.setFrame(clamped(frame), display: true)
         owl.window.title = "PM Pet · \(title)"
         panel.window.title = "PM Pet progress · \(title)"
-        payload = ["pet": pet, "quota": state["quota"] ?? NSNull(), "capabilities": state["capabilities"] ?? [:], "panelVisible": panelVisible, "_revision": state["revision"] ?? 0]
+        payload = ["pet": pet, "quota": state["quota"] ?? NSNull(), "capabilities": state["capabilities"] ?? [:], "panelVisible": panelVisible, "topInset": Double(Self.topInset), "_revision": state["revision"] ?? 0]
         owl.render(payload)
         panel.render(payload)
         let question = pet["question"] as? [String: Any]

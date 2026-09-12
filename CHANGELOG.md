@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added a compact overhead roadmap with semantic state dots, current-step focus, overflow counts, and completion-synchronized orbit animation. Prompts remain visible even after a completed roadmap.
+- Added red required-information reminders alongside yellow decisions, linked to an optional pending step and original input destination. System password detection remains unavailable; input reminders require explicit agent reports.
 - Remove the owl's pale outer halo and use rounded native glass for compact controls, with a Reduce Transparency fallback. Quota freshness remains a small unboxed line below its compact pill.
 - Detect new root user requests, mark the previous roadmap for review, and require a full plan report before showing its updated percentage; show reading during planning, building, and checking.
 

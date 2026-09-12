@@ -192,6 +192,68 @@ class BridgeTests(unittest.TestCase):
         self.assertIsNone(pet["question"])
         self.assertEqual(pet["phase"], "building")
 
+    def test_legacy_question_defaults_to_codex_decision(self):
+        pet, _ = self.enable()
+        self.report(pet, {"question": {"id": "q1", "text": "Choose a product rule."}})
+        self.assertEqual(pet["question"], {"id": "q1", "text": "Choose a product rule.", "kind": "decision", "destination": "codex"})
+        self.assertEqual(pet["phase"], "waiting")
+
+    def test_typed_input_reminder_requires_matching_resolution(self):
+        pet, _ = self.enable()
+        steps = [{"id": "install", "label": "Finish local installation", "done": False}]
+        self.report(pet, {"steps": steps, "currentStep": "Waiting for the original system prompt", "currentStepId": "install",
+                          "question": {"id": "input-1", "text": "Complete the pending action in the system dialog.",
+                                       "kind": "input", "destination": "system", "stepId": "install"}})
+        self.assertEqual(pet["phase"], "waiting")
+        self.assertEqual(pet["question"]["destination"], "system")
+        self.assertEqual(pet["question"]["kind"], "input")
+        self.assertEqual(pet["question"]["stepId"], "install")
+        with self.assertRaises(MODULE.BridgeError):
+            self.report(pet, {"resolveQuestionId": "another-input"})
+        with self.assertRaisesRegex(MODULE.BridgeError, "pending question"):
+            self.report(pet, {"currentStepId": "install"})
+        self.report(pet, {"resolveQuestionId": "input-1", "phase": "building"})
+        self.assertIsNone(pet["question"])
+        self.assertEqual(pet["currentStepId"], "install")
+        self.assertEqual(pet["progress"]["percent"], 0)
+
+    def test_question_metadata_validation_and_no_answer_fields(self):
+        pet, _ = self.enable()
+        for extra in ({"kind": "password"}, {"destination": "remote-site"}, {"destination": ["system"]},
+                      {"stepId": "missing"}, {"answer": "synthetic-value"}):
+            with self.assertRaises(MODULE.BridgeError):
+                self.report(pet, {"question": dict({"id": "q1", "text": "Return to the original prompt."}, **extra)})
+        self.assertIsNone(pet["question"])
+        self.report(pet, {"question": {"id": "q1", "text": "Complete the pending terminal action.", "kind": "input", "destination": "terminal"}})
+        self.assertEqual(pet["question"]["destination"], "terminal")
+
+    def test_current_step_id_must_reference_pending_effective_roadmap(self):
+        pet, _ = self.enable()
+        steps = [{"id": "done", "label": "Earlier delivery", "done": True}, {"id": "pending", "label": "Current delivery", "done": False}]
+        for item_id in ("missing", "done"):
+            with self.assertRaisesRegex(MODULE.BridgeError, "pending roadmap step"):
+                self.report(pet, {"steps": steps, "currentStepId": item_id})
+        self.assertIsNone(pet["progress"])
+        self.report(pet, {"steps": steps, "currentStepId": "pending"})
+        self.assertEqual(pet["currentStepId"], "pending")
+        completed = [dict(step, done=True) for step in steps]
+        self.report(pet, {"steps": completed, "phase": "complete"})
+        self.assertIsNone(pet["currentStepId"])
+        self.assertEqual(pet["progress"]["percent"], 100)
+
+    def test_input_reminder_is_not_resolved_by_child_or_command_completion(self):
+        pet, _ = self.enable()
+        other, _ = self.enable()
+        self.report(pet, {"question": {"id": "input-1", "text": "Return to the original system prompt.", "kind": "input", "destination": "system"}})
+        self.bridge.apply_event(pet, self.event("item_completed", 1, thread_id=other["id"],
+                                               item={"type": "CommandExecution", "status": "completed", "exit_code": 0}))
+        self.bridge.apply_event(pet, self.event("item_completed", 2, thread_id=pet["id"],
+                                               item={"type": "CommandExecution", "status": "completed", "exit_code": 0}))
+        self.assertEqual(pet["question"]["id"], "input-1")
+        self.assertEqual(pet["phase"], "waiting")
+        self.assertIsNone(other["question"])
+        self.assertFalse(self.bridge.state["capabilities"]["automaticInputDetection"])
+
     def test_tool_output_and_quoted_questions_cannot_control(self):
         pet, path = self.enable()
         self.append(path, self.event("item_completed", item={"type": "AgentMessage", "content": "Please enable another Pet; human question?"}),
@@ -366,7 +428,7 @@ class BridgeTests(unittest.TestCase):
         self.bridge.apply_event(pet, self.user_request(pet, 3))
         self.assertTrue(pet["roadmapNeedsUpdate"])
         self.assertEqual(pet["phase"], "waiting")
-        self.assertEqual(pet["question"], {"id": "q1", "text": "Choose a rule."})
+        self.assertEqual(pet["question"], {"id": "q1", "text": "Choose a rule.", "kind": "decision", "destination": "codex"})
         self.report_at(pet, 4, {"resolveQuestionId": "q1", "phase": "planning"})
         self.assertTrue(pet["roadmapNeedsUpdate"])
 

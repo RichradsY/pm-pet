@@ -28,6 +28,7 @@ python3 scripts/pm-pet.py doctor
 ```
 
 - Click the owl to show/hide progress. Double-click or use its menu to return to the exact Codex conversation.
+- With progress hidden, the overhead dots show completed (green), current (deep green), pending (gray), decision (yellow), and required-input (red) states. Click a dot for the full roadmap; `+N` keeps long plans compact. Real completion makes the dots briefly orbit alongside the owl's spell.
 - Drag the owl, or use the app menu for size, per-Pet usage display, and disable.
 - Up to five main Pets can be enabled. Child agents appear under their parent and do not consume these slots.
 - Only the first newly enabled Pet initially shows usage. Explicit visibility choices survive disable/re-enable; usage does not migrate automatically to another Pet.
@@ -42,6 +43,7 @@ python3 scripts/pm-pet.py doctor
 | Run/turn activity | Read from that conversation's structured local events |
 | Roadmap and completion | Main-agent reports; a newly observed user request marks the previous roadmap as awaiting review until a full plan report arrives |
 | Important question | Explicit main-agent report with a stable question ID; answer stays in Codex |
+| Required information | Explicit red input reminder with its original Codex/system/terminal destination; no password field or automatic OS-prompt detection |
 | Question resolution | Matching ID and current generation/sequence required |
 | Child activity | Observed start/completion events; repeated interaction alone is not proof of a resumed child |
 | Account quota | Recorded general `codex` snapshot from a bound conversation, with source timestamp; missing 5h remains absent |

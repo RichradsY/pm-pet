@@ -38,6 +38,8 @@
 - Plan changes preserve still-valid work, reopen affected items for verification, recalculate progress, and explain the update.
 - Target behavior: hidden-panel updates leave an unread indicator until the user views progress; the native unread indicator remains to be implemented.
 - The progress panel sits above the owl and can be hidden and reopened by clicking it.
+- When the panel is hidden, a compact row above the owl shows completed steps in green, the current step in deep green, and pending steps in gray. The affected step becomes yellow for a decision or red for required information. Dots have descriptive hover/keyboard labels and open the full roadmap.
+- Show at most seven nearby steps, centered on the affected/current step, with `+N` for earlier or later steps. A new request awaiting scope review shows a review ring instead of a stale completed roadmap. A prompt after an entirely completed plan still shows an attention dot.
 - Native double-click/menu navigation opens the exact conversation's Codex deep link; browser prototypes only demonstrate navigation.
 - Native size controls are in the Pet menu, with 75%, 100%, 125%, and 150% presets. The prototype also demonstrates collapsible appearance settings.
 - The panel, reminder, and quota text retain their readable size when the pet scales.
@@ -46,8 +48,9 @@
 ## Pet behavior
 - Building: the owl reads a book and turns its pages.
 - Newly completed work: briefly show magic, then return to the current work activity.
-- Waiting for a person: interrupt magic, raise a yellow lantern, and change expression.
+- Waiting for a person: interrupt magic, raise a yellow decision lantern or red input lantern, and change expression. Input reminders identify whether the response belongs in Codex, a system window, or a terminal. The current adapter relies on explicit main-agent reports; it cannot automatically detect OS password prompts.
 - Appearance changes and elapsed animation time do not advance work or trigger progress feedback.
+- A verified pending-to-completed transition of the same step ID triggers the spell and a short orbit of the dots. New already-completed steps, restored bindings, and scope-only changes do not celebrate. Decisions and input reminders interrupt the animation immediately.
 - Reduced motion retains readable props and states without CSS animation.
 - No chicks appear by default; observed child-agent activity causes hatching, then growth and departure. Repeated interaction alone is not proof of resumed work.
 - Native chicks follow their own stable child identities. Browser prototypes retain simulated child controls.

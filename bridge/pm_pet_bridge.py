@@ -3,6 +3,8 @@
 
 Python 3.9+, standard library only. No credentials, network calls, or Codex settings.
 Transcript events are observations; this process never pauses or resumes agents.
+OS/terminal input prompts have no verified pending event in this adapter. Typed
+explicit reminders point back to their original surface; no input values are collected.
 """
 
 import argparse
@@ -25,6 +27,8 @@ MAX_PETS = 5
 MAX_REQUEST_BYTES = 128 * 1024
 MAX_LINE_BYTES = 16 * 1024 * 1024
 PHASES = {"idle", "planning", "building", "checking", "waiting", "complete", "paused", "error"}
+QUESTION_KINDS = {"decision", "input"}
+QUESTION_DESTINATIONS = {"codex", "system", "terminal"}
 UUID_PATTERN = re.compile(r"^[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$")
 
 
@@ -85,7 +89,7 @@ def ensure_runtime(runtime):
 def default_state():
     return {"schemaVersion": 1, "revision": 0, "pets": [],
             "quota": {"windows": {}, "observedAt": None, "source": "unavailable"},
-            "capabilities": {"executionControl": False}, "everEnabled": False}
+            "capabilities": {"executionControl": False, "automaticInputDetection": False}, "everEnabled": False}
 
 
 def checked_transcript(path, conversation_id):
@@ -207,7 +211,7 @@ class Bridge:
         self.state = read_json(self.state_path) if self.state_path.exists() else default_state()
         if self.state.get("schemaVersion") != 1:
             raise BridgeError("Unsupported runtime state version; use a separate runtime directory.")
-        self.state["capabilities"] = {"executionControl": False}
+        self.state["capabilities"] = {"executionControl": False, "automaticInputDetection": False}
         self.bindings = read_json(self.bindings_path) if self.bindings_path.exists() else {}
         self.tails = {}
         self.last_discovery = {}
@@ -251,6 +255,7 @@ class Bridge:
             pet = {"id": conversation_id, "title": "Conversation " + conversation_id[-6:], "theme": theme,
                    "enabled": True, "quotaVisible": not self.state.get("everEnabled", False), "size": 100,
                    "position": None, "phase": "idle", "progress": None, "currentStep": "Waiting for task activity",
+                   "currentStepId": None,
                    "steps": [], "question": None, "sourceUpdatedAt": None, "sourceStatus": "connecting",
                    "children": [], "generation": 0, "lastReportSequence": -1, "planVersion": 0,
                    "roadmapNeedsUpdate": False, "requestObservedAt": None, "planReviewedAt": None}
@@ -273,6 +278,12 @@ class Bridge:
         if not isinstance(value, str) or not value.strip() or len(value) > max_length:
             raise BridgeError("%s must be non-empty text, at most %d characters." % (name, max_length))
         return value.strip()
+
+    def pending_step_id(self, value, steps, field):
+        item_id = self.clean_text(value, field, 100)
+        if not any(step["id"] == item_id and not step["done"] for step in steps):
+            raise BridgeError("%s must reference an existing pending roadmap step." % field)
+        return item_id
 
     def preferences(self, request):
         pet = self.require_pet(validate_id(request.get("id")))
@@ -312,7 +323,7 @@ class Bridge:
         if isinstance(sequence, bool) or not isinstance(sequence, int) or sequence <= pet["lastReportSequence"]:
             raise BridgeError("A new integer report sequence is required; read status before reporting.")
         if pet["question"] and report.get("resolveQuestionId") != pet["question"]["id"]:
-            if any(key in report for key in ("steps", "currentStep", "planRevision")) or report.get("phase", "waiting") != "waiting":
+            if any(key in report for key in ("steps", "currentStep", "currentStepId", "planRevision")) or report.get("phase", "waiting") != "waiting":
                 raise BridgeError("Resolve the pending question by id before updating progress or continuing work.")
         updated = copy.deepcopy(pet)
         # Preserve the last actual plan review across later phase-only reports.
@@ -343,6 +354,10 @@ class Bridge:
                 updated["planVersion"] += 1
         if "currentStep" in report:
             updated["currentStep"] = self.clean_text(report["currentStep"], "currentStep", 200)
+        if "currentStepId" in report:
+            updated["currentStepId"] = self.pending_step_id(report["currentStepId"], updated["steps"], "currentStepId")
+        elif updated.get("currentStepId") and not any(step["id"] == updated["currentStepId"] and not step["done"] for step in updated["steps"]):
+            updated["currentStepId"] = None
         if "phase" in report:
             if report["phase"] not in PHASES:
                 raise BridgeError("Unknown phase.")
@@ -351,10 +366,22 @@ class Bridge:
             question = report["question"]
             if not isinstance(question, dict):
                 raise BridgeError("Use resolveQuestionId to clear a question; question must be an object.")
+            if set(question) - {"id", "text", "kind", "destination", "stepId"}:
+                raise BridgeError("Question accepts reminder metadata only, not input values or answers.")
             question_id = self.clean_text(question.get("id"), "question id", 100)
             if updated["question"] and updated["question"]["id"] != question_id:
                 raise BridgeError("Resolve the current question by id before replacing it.")
-            updated["question"] = {"id": question_id, "text": self.clean_text(question.get("text"), "question text", 1200)}
+            kind = question.get("kind", "decision")
+            destination = question.get("destination", "codex")
+            if not isinstance(kind, str) or kind not in QUESTION_KINDS:
+                raise BridgeError("Question kind must be decision or input.")
+            if not isinstance(destination, str) or destination not in QUESTION_DESTINATIONS:
+                raise BridgeError("Question destination must be codex, system, or terminal.")
+            normalized = {"id": question_id, "text": self.clean_text(question.get("text"), "question text", 1200),
+                          "kind": kind, "destination": destination}
+            if "stepId" in question:
+                normalized["stepId"] = self.pending_step_id(question["stepId"], updated["steps"], "question stepId")
+            updated["question"] = normalized
         if "resolveQuestionId" in report:
             if not updated["question"] or updated["question"]["id"] != report["resolveQuestionId"]:
                 raise BridgeError("Question resolution must match the pending question id.")
@@ -495,6 +522,8 @@ class Bridge:
             if isinstance(plan, list) and plan and all(isinstance(item, dict) and isinstance(item.get("step"), str) and item.get("status") in ("pending", "in_progress", "completed") for item in plan):
                 steps = [{"id": "plan-%d" % index, "label": item["step"][:200], "done": item["status"] == "completed"} for index, item in enumerate(plan[:100])]
                 pet["steps"] = steps
+                if pet.get("currentStepId") and not any(step["id"] == pet["currentStepId"] and not step["done"] for step in steps):
+                    pet["currentStepId"] = None
                 done = sum(1 for item in steps if item["done"])
                 pet["progress"] = {"done": done, "total": len(steps), "percent": round(100 * done / len(steps))}
                 current = next((item["step"] for item in plan if item["status"] == "in_progress"), None)
