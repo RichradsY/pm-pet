@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.1.0-alpha.1 — 2026-09-12
+
+First public source preview. Builds locally on macOS; no signed, notarized application download is provided.
+
+- Added the MIT License, visual README, co-build/HITL guidance, and source installation documentation.
+- Added an owned user command and optional Codex skill setup, explicit update and uninstall, and isolated lifecycle checks.
 
 - Recover explicitly cancelled or deferred questions without manufacturing answers or permissions. Optional setup offers Not now with scoped acknowledgments, retryable failures, and restart-safe cancellation history; ordinary product decisions remain gated. Slow acknowledgments stay unconfirmed, and new question calls share a serialized payload budget with explicit overflow reminders.
 
@@ -19,7 +24,7 @@
 - Added a source-checkout launcher and acknowledged local bridge for enable, status, preferences, structured reports, disable, and quit. Native launch and lifecycle were checked on the development Mac; no global installation or Codex configuration changes are performed.
 - Connected observed root/child activity and explicit roadmap/decision reports. Binding generation, increasing report sequence, and matching question IDs reject stale updates. Chicks retain their own lifecycle identity across animation interruptions.
 - Added shared cached general Codex quota with source freshness and weekly-only handling; model-specific buckets cannot replace the general allowance. An optional live CLI-account diagnostic is separate from Pet's default source because its Desktop account binding is unverified.
-- Added reusable Codex skill source and local integration documentation. The skill is uninstalled; consumer packaging, authenticated private installation, automatic live Desktop quota refresh, and enforced whole-build pause/resume remain future work.
+- Added reusable Codex skill source and local integration documentation. The skill now has an explicit source-install path; prebuilt consumer packaging, automatic live Desktop quota refresh, and enforced whole-build pause/resume remain future work.
 - Plan updated to one explicitly enabled Pet per conversation, including independent Pets in a shared project.
 - Defined conversation-based enable/disable, persistent character colors, parent-owned chicks, and independent build pause scopes.
 - Specified shared account quota refresh defaults and a staged implementation/acceptance plan; proposed refresh intervals are not current API polling guarantees.

@@ -1,33 +1,37 @@
 # Version management
 
-The `VERSION` file and `CHANGELOG.md` describe the checked-in product state. A Git tag identifies an immutable source snapshot; a GitHub Release is a separate distribution artifact.
+`VERSION` and `CHANGELOG.md` describe the source version. A Git tag identifies an immutable source snapshot; a GitHub Release is a separate publication and does not imply a prebuilt app exists.
 
-## Version stages
+## Versions
 
-| Example | Meaning |
+| Version | Meaning |
 | --- | --- |
-| `0.1.0-prototype.1` | Current UI prototype; not an installable app |
-| `0.1.0-alpha.1` | First actual installable private test build, after it passes installation checks |
-| `0.1.0-alpha.2` | A subsequent private test build |
-| `0.1.0` | A deliberately approved non-prerelease version |
-| `0.2.0` | A subsequent capability release |
+| `0.1.0-prototype.1` | Historical browser prototype baseline; its tag is unchanged |
+| `0.1.0-alpha.1` | Public source preview with native Codex integration and a source installer |
+| `0.1.0-alpha.N` | Further preview milestones; increase the suffix for a new published snapshot |
+| `0.1.0` | A future deliberately validated stable release |
 
-These later versions are examples, not releases already created. Public visibility and version maturity are independent: an alpha can remain private, and a private repository does not automatically become public at version 0.1.0.
+The alpha is installed from source. It is not a signed, notarized app download. Visibility and maturity are independent: a public repository can remain experimental.
+
+The native bundle uses a numeric `CFBundleShortVersionString` (`0.1.0`) and increasing `CFBundleVersion`; `PMPetSourceVersion` records the full preview version. Update these with `VERSION` for a release. Do not reuse a build number for a replacement published binary.
 
 ## Development workflow
 
-- Keep the repository's default branch as the shared baseline. Use `codex/<change>` branches for implementation work.
-- Make focused commits with a concise explanation of the change; update the changelog for user-visible behavior.
-- Use pull requests for subsequent changes and run checks appropriate to the changed behavior before merging.
-- Create annotated `v<VERSION>` tags for deliberate milestones. Never move a published version tag or replace release assets under the same version; issue a new version for fixes.
-- Do not create a downloadable app release for a prototype-only tag.
+- Use `codex/<change>` branches and focused commits.
+- Review the user-visible behavior and run relevant checks before merging into `main`.
+- Update the changelog for changes people installing the project should know about.
+- Keep native generated bundles, runtime state, credentials, and signing material out of Git.
+- Do not move an existing published tag or replace its assets. Publish a new version for a fix.
 
-## Before publishing an installable private build
+## Publishing a source preview
 
-1. Build the app and helper, and verify that their reported version matches `VERSION`.
-2. Test installation, launch, binding, disable/enable, quit, upgrade, and uninstall on supported targets.
-3. Verify that pending questions remain answerable in Codex after Pet exits.
-4. Package tested architectures, release metadata, and SHA-256 checksums. Keep signing credentials in release secrets, never in Git.
-5. Upload a GitHub prerelease for the exact tag and commit. Keep at least the previous working version available for rollback.
+1. Review tracked files and reachable Git history for private runtime data and secrets; check the public-facing PR and release text too.
+2. Verify the documented source installation in an isolated prefix, optional skill setup, update, and uninstall ownership behavior.
+3. Run Python and JavaScript checks and build the native app from a clean source snapshot. Record what was tested on a real Mac and what remains unverified.
+4. Merge the reviewed source and documentation into `main`.
+5. Create the annotated `v<VERSION>` tag for that exact source. Publish release notes as a prerelease, clearly labeled **source preview**.
+6. If changing visibility, do so only after the project owner explicitly requests it and the repository contents are ready.
 
-Publishing or changing visibility is an explicit action, not an automatic side effect of pushing to a branch. CI validation should be separate from a manually triggered release workflow.
+## Future prebuilt app distribution
+
+A downloadable app requires a separate distribution check: supported architectures, version metadata, installation/update/rollback behavior, signing and notarization, and SHA-256 checksums for immutable release assets. Credentials belong in release secrets, never source files. Do not advertise a Homebrew cask or one-command binary download before it exists and has been verified.

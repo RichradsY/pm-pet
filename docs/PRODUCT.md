@@ -3,8 +3,8 @@
 ## Current status
 - A native macOS developer app now connects to explicitly enabled local Codex conversations through a source-checkout helper.
 - It displays reported roadmaps/questions, observes root and child activity, and shares cached general Codex quota with its source timestamp. It does not enforce agent pause/resume or automatically fetch live Desktop quota.
-- The included conversation skill is source only, not installed. A consumer installer and downloadable release remain future work.
-- The separate HTML prototypes still use simulated data. The tagged `0.1.0-prototype.1` milestone is unchanged; native work is unreleased.
+- A source installer provides a user command and optional Codex skill. A signed, notarized downloadable app remains future work.
+- Version `0.1.0-alpha.1` is a source preview. The separate HTML prototypes use simulated data; the historical `0.1.0-prototype.1` tag is unchanged.
 
 ## Purpose and scope
 - PM Pet visualizes a product specification being developed with an agent.
@@ -80,6 +80,6 @@
 - Uninstall: remove only files owned by the installation; explain any retained settings or cache.
 - Never remove Codex conversations or project work, or overwrite unrelated configuration.
 - Installation must not automatically enable login startup, modify project rules, or grant approvals.
-- Per-conversation enable/disable, explicit `disable --all`, app quit, and preference restoration are implemented for the developer build. Installed-package update/uninstall and distribution checks remain future work.
+- Per-conversation enable/disable, explicit `disable --all`, app quit, and preference restoration are implemented for the developer build. Source-install update/uninstall are documented in [Installation](INSTALLATION.md); prebuilt package distribution remains future work.
 
 See [Local Codex integration](LOCAL-INTEGRATION.md) for current setup and [Native app development plan](APP-DEVELOPMENT.md) for remaining capability gates.

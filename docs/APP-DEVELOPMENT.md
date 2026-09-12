@@ -1,6 +1,6 @@
 # Native app development plan
 
-Status: unreleased native developer integration, 2026-09-12. The repository now contains a Swift/AppKit app, a local helper/bridge, and uninstalled Codex skill source. The five-Pet browser prototype remains available in `prototypes/pm-pet-multi.html`. The tagged prototype and `VERSION` remain `0.1.0-prototype.1`; there is no consumer installer or downloadable app release.
+Status: `0.1.0-alpha.1` source preview, 2026-09-12. The repository contains a Swift/AppKit app, local helper/bridge, source installer, and optional Codex skill. The five-Pet browser prototype remains in `prototypes/pm-pet-multi.html`. The historical prototype tag is unchanged. A signed/notarized downloadable app remains future work. See [Installation](INSTALLATION.md) for the current user flow.
 
 ## Current implementation
 
@@ -11,7 +11,7 @@ Status: unreleased native developer integration, 2026-09-12. The repository now 
 | Progress and decisions | Main-agent roadmap/question reports, generation/sequence validation, matching question resolution | Automatic integration discovery and sustained reporting across sessions |
 | Activity | Recorded root/child events; child identity stays with its owning Pet | Broader transcript-format and resumed-child coverage |
 | Quota | Shared cached general Codex snapshot, timestamp/age, weekly-only handling | Verified Desktop account binding and automatic live refresh |
-| Lifecycle | Acknowledged launch/rendering, disable/re-enable, quit/restart tested on the development Mac | Consumer installation, update, uninstall, and other-machine tests |
+| Lifecycle | Acknowledged launch/rendering, disable/re-enable, quit/restart tested on the development Mac | Prebuilt package distribution and other-machine tests |
 | Execution control | Explicitly unavailable in the adapter | Confirmed pause/review/resume of the owning build tree |
 
 Run `python3 scripts/pm-pet.py enable --title "My build"` from the owning Codex conversation. The first launch may need macOS/Codex approval. See [Local Codex integration](LOCAL-INTEGRATION.md) for exact commands and the current capability boundary.
@@ -44,7 +44,7 @@ Enable defaults, capacity, and per-Pet quota preferences are implemented in the 
 
 ## Conversation entry point
 
-The current entry point is the source-checkout helper: `python3 scripts/pm-pet.py enable` or `disable`. A user can ask the assistant to call that helper from the owning conversation. The included [skill source](../integrations/codex/pm-pet/SKILL.md) describes the same flow but is not installed or automatically discoverable. `$pm-pet` will be a custom skill invocation after explicit setup, not a built-in Codex command.
+The current entry point is the source-checkout helper: `python3 scripts/pm-pet.py enable` or `disable`. A user can ask the assistant to call that helper from the owning conversation. The optional [skill](../integrations/codex/pm-pet/SKILL.md) describes the same flow and can be installed explicitly through the [source installer](INSTALLATION.md). `$pm-pet` is a custom installed skill, not a built-in Codex command.
 
 Codex documents explicit skill invocation and optional `allow_implicit_invocation: false`. Use an explicitly invoked integration for lifecycle changes; do not infer enable/disable requests by searching transcripts for those words. Quoted text, tool output, and historical instructions must not toggle a Pet. [Build skills](https://learn.chatgpt.com/docs/build-skills)
 
@@ -182,14 +182,14 @@ Current: explicit roadmap/question reports, observed root/child activity, stale-
 
 Deliverable: real multi-conversation observation, five-Pet capacity checks, and a tested cooperative reporting flow. Whole-build pausing remains a separate capability gate.
 
-### 4. Package the private alpha and lifecycle tests
+### 4. Source installation and future app distribution
 
-Current: local launch/disable/quit/restart are tested on the development Mac. The skill remains uninstalled, and consumer packaging, authenticated downloads, upgrade, and uninstall are not implemented.
+Current: local launch/disable/quit/restart have been tested on the development Mac. The source installer provides a user command, an optional skill, explicit update, and owned-file uninstall. The public preview requires local developer tools; it does not ship a prebuilt app.
 
-- Package the app/helper and optional conversation integration with clear installation ownership.
-- Test authenticated private installation, upgrade, disable/enable, quit/restart, disconnect, and uninstall.
-- Test window restore after display changes, unavailable data, and stale/late events.
-- Only after passing these checks, create a new `0.1.0-alpha.N` version and an explicitly published private prerelease. The prototype tag stays unchanged.
+- Extend installation and lifecycle testing to other Macs and Codex versions.
+- Test window restoration after display changes, unavailable data, and stale/late events.
+- Prepare signed, notarized packages with immutable version metadata and checksums before advertising binary downloads.
+- Keep the historical prototype tag unchanged and publish each future preview under a new version.
 
 ### 5. Verify execution control
 

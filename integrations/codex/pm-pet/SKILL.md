@@ -5,7 +5,7 @@ description: Enable or disable the PM Pet desktop companion for this Codex conve
 
 # PM Pet
 
-Use the helper at `scripts/pm_pet.py` relative to this skill folder. In the source checkout it locates the developer launcher automatically. If installed separately, the launcher checkout must be configured through `PM_PET_HOME`; do not guess a user's project path.
+Use the helper at `scripts/pm_pet.py` relative to this skill folder. In the source checkout it locates the developer launcher automatically; `PM_PET_HOME` can explicitly override that source-helper location. When installed by `scripts/setup.py`, the generated helper is bound to the chosen checkout and needs no environment configuration. Do not guess a user's project path or move a bound checkout without reinstalling.
 
 ## Conversation lifecycle
 
@@ -55,6 +55,6 @@ Hook installation is optional to the reminder UX. If the user defers it, continu
 
 ## Current integration limits
 
-This is a developer integration, not an installed or notarized consumer app. The launcher can build locally on a Mac with developer tools. Installing this skill is separate; do not edit Codex configuration or global skill folders without the user's request.
+This is a source preview with a local installer, not a notarized consumer app. The launcher builds locally on a Mac with developer tools. The skill is optional and installed only by explicit request; do not edit Codex configuration or global skill folders merely because this source is present.
 
 Quota displayed by the default adapter comes from the bound conversation's recorded snapshot, with its real timestamp. A separate CLI-account quota probe is available for diagnostics, but its account has not been proven to match the desktop account. Never relabel cached data as a fresh API read.

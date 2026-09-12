@@ -1,74 +1,147 @@
-# Developer setup and distribution plan
+# Install PM Pet from source
 
-Status: a native macOS developer app and source-checkout helper are implemented. There is no consumer installer, command on PATH, or downloadable application release. The repository and ongoing work remain private; `VERSION` still identifies the tagged prototype baseline.
+PM Pet is a macOS source preview. The installer creates a `pm-pet` command that points to your checkout; the native app builds locally when you first enable a conversation. There is no downloadable, Developer ID signed or notarized binary release yet. The local build uses ad hoc signing.
 
-## Available now: local developer build
+## Requirements
 
-With Swift command-line developer tools and Python 3 installed, run from the owning Codex conversation:
+- macOS 13 deployment target. The native app has been tested on macOS 26.6.2 / Apple silicon; older macOS versions and Intel Macs have not been verified.
+- Python 3.9 or later, Git, and Apple's command line developer tools with `swiftc` (`xcode-select --install` if needed).
+- Codex desktop for the current conversation adapter. Other agents and iOS are not supported by this preview.
+
+Keep the source checkout in a stable location. Moving or deleting it breaks the installed command and skill until you reinstall from its new location.
+
+## Install
 
 ```sh
-python3 scripts/pm-pet.py enable --title "My build"
-python3 scripts/pm-pet.py status
-python3 scripts/pm-pet.py preferences --json '{"quotaVisible":true}'
-python3 scripts/pm-pet.py disable
-python3 scripts/pm-pet.py quit
+git clone https://github.com/RichradsY/pm-pet.git
+cd pm-pet
+python3 scripts/setup.py install --with-skill
+export PATH="$HOME/.local/bin:$PATH"
+pm-pet doctor
 ```
 
-The first enable builds `build/PM Pet.app`, starts its owned bridge, validates the conversation's session metadata, and waits for native rendering acknowledgement. macOS or Codex may request launch permission. Outside Codex, supply `--conversation <exact-uuid>` rather than a project path. Up to five root conversations can be enabled; repeated enable reuses the existing binding.
+The default prefix is `~/.local`: the command is `~/.local/bin/pm-pet`, with its ownership manifest at `~/.local/share/pm-pet/install.json`. `--with-skill` explicitly installs the Codex skill at `~/.codex/skills/pm-pet`. Omit it to install only the command.
 
-Use the same checkout's helper by absolute path from other workspaces to share its app/runtime. Preferences and binding state remain in the ignored `.pm-pet/runtime/` directory. The app menu provides per-Pet progress visibility, size, quota display, disable, and app quit; `disable --all` explicitly disables every Pet.
+The installer prints the PATH command for your chosen prefix. It does not change shell startup files. Add the printed PATH line to your own shell configuration if you want it to persist in future terminals.
 
-Disable preserves the selected Pet's preferences and stops its tracking. Quit stops the native app and its owned bridge, preserving bindings for restart. Neither changes Codex execution or approves a pending decision. Non-launching commands do not reopen a stopped app.
+For explicit locations, including an isolated trial installation:
 
-This build does not install globally, edit Codex configuration, or add login startup. The [skill source](../integrations/codex/pm-pet/SKILL.md) is included but uninstalled; skill discovery is a separate setup step. There is no installed package to uninstall. Quit the app to stop the developer integration; source files and local preferences remain in the checkout. See [Local Codex integration](LOCAL-INTEGRATION.md) for report payloads, diagnostics, and limitations.
+```sh
+python3 scripts/setup.py install \
+  --prefix "$HOME/.local" \
+  --with-skill \
+  --skill-dir "$HOME/.codex/skills/pm-pet"
+```
 
-## Private development
+`--skill-dir` is the complete destination directory and requires `--with-skill`. The installed helper points to the exact checkout; no `PM_PET_HOME` setup is required. The installer refuses to replace an existing command, skill directory, or unknown installation. Repeating the same install is harmless; use `pm-pet update` to refresh owned files.
 
-Keep the repository and its releases private during development. Testers must have repository access and authenticate with their own GitHub account. Do not embed access tokens in scripts or URLs.
+Installation does not build or start the app, enable a conversation, edit Codex configuration, install a Hook, establish Hook trust, or add a login item. Codex may need to restart before a newly installed skill appears.
 
-Future test releases should ship prebuilt application archives through GitHub Releases. End users should not need Xcode, Swift, Node.js, or a local source build. Publish only architectures and macOS versions that have been built and tested.
+## Connect a conversation
 
-The intended private bootstrap uses GitHub CLI authentication and a pinned prerelease tag. A future installer will download through `gh release download`, verify the release manifest and archive checksum, and install the app and its command-line helper. Do not advertise anonymous `curl` downloads for private releases.
+In a root Codex conversation, ask:
 
-GitHub CLI provides authenticated release asset downloads; each tester needs access to the private repository. [Release download command](https://cli.github.com/manual/gh_release_download)
+> Use $pm-pet to enable a Pet for this conversation and keep its roadmap updated.
 
-## Public distribution
+The skill uses the current conversation's verified ID. On first enable, the helper builds `build/PM Pet.app`, starts the companion, and waits for native-window confirmation before reporting success. Local app launch permissions remain under macOS and Codex control.
 
-Changing repository visibility requires an explicit release decision. Audit tracked files and Git history before that change; deleting a private file in a later commit does not remove it from history. Select a license before public distribution rather than silently choosing one now.
+You can also use the command inside Codex's terminal context:
 
-Once a signed, notarized app and tested installer exist, offer a one-command installer backed by GitHub Release assets. Resolve the release once and download all files from that exact version so a concurrent release cannot mix an installer, checksum, and archive. [GitHub release links](https://docs.github.com/en/repositories/releasing-projects-on-github/linking-to-releases)
+```sh
+pm-pet enable --title "My build"
+pm-pet status
+```
 
-For existing Homebrew users, a custom tap can later install the same prebuilt app via a cask. Homebrew supports fully qualified `brew install --cask owner/tap/cask` installation. This is a proposed second channel, not an existing package. [Homebrew taps](https://docs.brew.sh/Tap-Trust)
+Outside that context, provide the exact Codex conversation UUID:
 
-Command-line installation does not replace application signing and notarization. Do not remove quarantine attributes or disable Gatekeeper as part of installation. [Apple Developer ID](https://developer.apple.com/developer-id/)
+```sh
+pm-pet enable --conversation YOUR-CONVERSATION-UUID --title "My build"
+pm-pet status --conversation YOUR-CONVERSATION-UUID
+```
 
-## Planned installer behavior
+The launcher never guesses a conversation from the current directory or most recent chat. Enabling the same conversation is idempotent; at most five main Pets can be enabled. Child agents do not become separate main Pets.
 
-- Script-managed installs target `~/Applications/PM Pet.app` and a helper under `~/.local/bin`; do not require administrator access by default.
-- Check the installed app's ownership and identity before updating it. Never overwrite an unrelated app or command with the same name.
-- If the helper directory is missing from PATH, show its full command path and setup instructions; do not silently rewrite shell startup files.
-- Preserve preferences and conversation bindings on upgrade. Stage and validate the replacement before switching; retain the working version if any step fails.
-- Record the installation channel, version, and owned file paths. Homebrew-managed installs are upgraded and removed through Homebrew; the script must not overwrite them.
-- Do not add login items, modify Codex configuration, or enable project integration merely because the app was installed.
-- Default uninstall removes only owned application files and helpers. Explicit data removal can also clear Pet preferences and caches; it never removes Codex conversations or project code.
-- Installation does not enable any conversation. An installed conversation skill/helper enables individual Pets explicitly; verify integration discovery and any session restart requirements.
+## Daily commands
 
-## Future installed CLI contract
-
-The source helper above already implements local start, status, enable, disable, preferences, report, and quit. The following installed command names, update/uninstall actions, version/channel reporting, and package ownership behavior remain proposed; `pm-pet` is not available on PATH yet.
-
-| Command | Intended behavior |
+| Command | Effect |
 | --- | --- |
-| `pm-pet start` | Open the app and binding interface |
-| `pm-pet status` | Show the validated current conversation's binding and tracking state, plus app version/channel |
-| `pm-pet disable` | Stop tracking and prompts for the validated current conversation; preserve its disabled preference |
-| `pm-pet enable` | Enable the validated current conversation; reuse its existing Pet and never approve pending decisions |
-| `pm-pet disable --all` | Explicitly stop tracking for every Pet |
-| `pm-pet quit` | Stop all Pet processes and listeners |
-| `pm-pet update` | Upgrade a script-managed install; identify the proper command for other channels |
-| `pm-pet uninstall` | Remove a script-managed install using its ownership manifest |
-| `pm-pet uninstall --purge` | Also remove explicitly listed Pet-owned data |
+| `pm-pet status` | Read this conversation's state; never launches the app. |
+| `pm-pet status --all` | Inspect all registered Pets. |
+| `pm-pet preferences --json '{"quotaVisible":true}'` | Restore the selected Pet's quota display. |
+| `pm-pet disable` | Hide this conversation's Pet and stop observing it; retain its preferences. |
+| `pm-pet disable --all` | Explicitly disable all Pets. |
+| `pm-pet quit` | Ask the owned companion and bridge to quit; retain bindings. |
+| `pm-pet start` | Start the companion using its saved bindings. |
+| `pm-pet build` | Compile the native app in this checkout; quit first if it is running. |
+| `pm-pet doctor` | Check source binding, owned files, Python, Swift, and app status without starting the app. |
+| `pm-pet --help` | Show command guidance. |
 
-The menu bar must provide the same lifecycle controls. Disabling or uninstalling Pet does not automatically answer a question or resume a paused build.
+Per-conversation commands need `CODEX_THREAD_ID` or `--conversation UUID`. Quitting, disabling, or hiding the Pet does not answer a question or stop Codex itself. `executionControl` remains false; the optional Hook is a separate, reviewed setup outside this installer.
 
-Outside Codex, require an explicit conversation identity or a user selection. Do not infer it from the current directory and do not treat a missing identity as a request to control all Pets. See [Native app development plan](APP-DEVELOPMENT.md).
+The default runtime is `<checkout>/.pm-pet/runtime/`. It contains local bindings, preferences, roadmap/question metadata, and observed quota snapshots, and is ignored by Git. Quota uses actual recorded timestamps and may be stale. The installer does not read credentials or send runtime data elsewhere. See [Local Codex integration](LOCAL-INTEGRATION.md) for report payloads and limitations.
+
+## Update
+
+Use your existing checkout and stop the app before replacing its compiled files:
+
+```sh
+cd /path/to/pm-pet
+pm-pet quit
+git pull --ff-only
+pm-pet build
+pm-pet update
+pm-pet start
+```
+
+`pm-pet update` only refreshes the installed command and optional skill from the local checkout. It does not fetch code, rebuild, or restart the app. Review Git's output before proceeding if it reports local changes or a failed update. Restart Codex if necessary to load updated skill instructions.
+
+If you use a release tag, choose the tag explicitly in Git instead of pulling an unrelated branch. Keep the same checkout path. Switching to another checkout or changing the optional skill destination requires uninstalling the old installation first.
+
+Ordinary update errors and Ctrl-C restore the previous installed files. An uncatchable process kill or power loss during replacement is outside this preview's rollback guarantee; do not force-kill the installer. Modified or inconsistent owned files cause later update/uninstall to stop for inspection.
+
+## Uninstall
+
+To stop using one Pet, `pm-pet disable` is enough; `pm-pet quit` closes the companion.
+
+For a clean command/skill removal:
+
+```sh
+pm-pet quit
+pm-pet uninstall
+```
+
+Uninstall removes only files recorded in its ownership manifest, after verifying their contents. It retains the source checkout, locally built app, runtime, and preferences. It does not terminate an already-running app. If an owned file was edited or an unknown file was added to the installed skill, removal stops before deleting the installation; move your changes somewhere safe and restore the expected owned files before retrying.
+
+To also erase this checkout's default runtime and preferences:
+
+```sh
+pm-pet quit
+pm-pet uninstall --purge-runtime
+```
+
+This opt-in deletion is restricted to the fixed checkout's verified `.pm-pet/runtime` directory. It refuses unknown state, symlinks, a recent running heartbeat, or a held native/daemon lock. It never follows a custom runtime argument or removes other conversation data. Custom `--runtime` directories remain yours to manage. The checkout and built app can be removed separately after the app is stopped and the command uninstalled.
+
+If the installed command is not on PATH, use its full path or the source entry point:
+
+```sh
+python3 scripts/setup.py uninstall --prefix "$HOME/.local"
+```
+
+## Troubleshooting
+
+- **Command not found:** run the PATH line printed by the installer, or use `<prefix>/bin/pm-pet` directly.
+- **Swift missing:** install Apple's command line developer tools, then run `pm-pet doctor` again.
+- **Skill missing:** check its destination, restart Codex, and verify that the checkout still exists. Installation does not enable conversations automatically.
+- **Existing path refused:** preserve that file or directory; choose another prefix/destination or uninstall its recognized existing installation first.
+- **Changed owned file refused:** inspect and save your changes. The installer does not overwrite them during update or uninstall.
+- **Moved checkout:** use the original checkout to uninstall before moving it. If it is already gone, restore it temporarily to the recorded path to perform verified removal, then install from the new path.
+- **Pet shows an old plan:** the main agent must report a reviewed roadmap. The observer can flag a newer request but cannot invent semantic progress.
+- **Question still pending:** answer in the original Codex/system/terminal surface and have the main agent review the result. For explicitly optional setup, **Not now** records deferment; it does not approve or install the integration.
+
+Do not disable Gatekeeper or remove quarantine as an installation shortcut. This preview builds from inspectable local source; distributing a signed, notarized app is a separate release step.
+
+## Validation for this source preview
+
+On macOS 26.6.2 / Apple silicon, a clean staged source snapshot was installed into a temporary prefix with a separate optional skill directory, including paths with spaces. The installed command and skill helper passed diagnostics; the native app compiled with the preview version; update and uninstall completed without changing the source checkout. That isolated test did not launch another app or enable a conversation. Native conversation binding and interaction were checked separately on the development Mac.
+
+The release checks include 127 Python tests (27 for source installation) and 57 JavaScript state tests. Other machines, older macOS releases, Intel builds, and a prebuilt distribution remain unverified.

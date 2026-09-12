@@ -1,6 +1,6 @@
 # Local Codex integration
 
-This developer build connects a native macOS Pet to an explicitly selected local Codex conversation. It does not install globally, change Codex settings, register a login item, or upload conversation data. The repository remains private. There is no signed/notarized downloadable release yet.
+This source preview connects a native macOS Pet to an explicitly selected local Codex conversation. The optional source installer provides a user command and an explicitly requested Codex skill; see [Installation](INSTALLATION.md). It does not register a login item, trust hooks, or upload conversation data. There is no signed/notarized downloadable app yet.
 
 ## Start from this checkout
 
@@ -33,7 +33,7 @@ python3 scripts/pm-pet.py doctor
 - Up to five main Pets can be enabled. Child agents appear under their parent and do not consume these slots.
 - Only the first newly enabled Pet initially shows usage. Explicit visibility choices survive disable/re-enable; usage does not migrate automatically to another Pet.
 - Disable stops observing that conversation. Quit stops the native app and its owned bridge. Neither action answers a pending question or stops/resumes Codex work.
-- There is no global installation to uninstall at this stage. Quit the app to disable the running integration; source files and local preferences remain in this checkout.
+- If installed with the source installer, follow [Uninstall](INSTALLATION.md#uninstall) to remove its owned command and optional skill. Quitting alone preserves the source checkout and local preferences.
 
 ## What is connected
 
@@ -61,7 +61,7 @@ It makes direct App Server calls without a model prompt and prints metadata only
 
 ## Report the real roadmap
 
-The reusable developer skill source is [PM Pet](../integrations/codex/pm-pet/SKILL.md). It has not been installed into a global or project skill directory. Existing conversations can explicitly call the local helper immediately; skill discovery in a newly configured Codex session is a separate step.
+The reusable skill source is [PM Pet](../integrations/codex/pm-pet/SKILL.md). Install it explicitly through the [source installer](INSTALLATION.md) to make it discoverable; the source helper also works immediately without installing the skill. Open a new Codex task if a newly installed skill is not discovered in the current one.
 
 Read `status`, write a payload using that Pet's generation and next sequence, then run:
 
