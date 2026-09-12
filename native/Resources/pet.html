@@ -301,7 +301,7 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent
 <div class="pp-header"><span class="native-title"></span><div class="pp-header-right"><span class="native-phase"></span><button class="pp-close" aria-label="Hide progress">×</button></div></div>
 <div class="pp-question" hidden><div class="pp-question-meta" role="status" aria-live="polite" aria-atomic="true"><span class="pp-question-label">Waiting for your reply</span><span class="pp-question-count" hidden></span></div><p tabindex="0" aria-label="Question details"></p><div class="pp-question-hint" id="question-reply-hint" hidden></div><div class="native-input-hint" hidden></div><div class="pp-question-actions"><button class="pp-return">Answer in Codex ↗</button><button class="pp-defer-setup" type="button" hidden>Not now</button></div><div class="pp-setup-feedback" role="status" hidden></div></div>
 <div class="pp-title"></div><div class="native-no-plan">No roadmap reported</div>
-<div class="pp-progress" hidden><div class="pp-progress-meta"><span class="pp-progress-count"></span><span class="pp-progress-percent"></span></div><div class="pp-progress-track" role="progressbar" aria-label="Roadmap completion" aria-valuemin="0" aria-valuemax="100"><span class="pp-progress-fill"></span></div></div>
+<div class="pp-progress" hidden><div class="pp-progress-meta"><span class="pp-progress-count"></span><span class="pp-progress-percent"></span></div><div class="pp-progress-track" role="progressbar" aria-label="Roadmap progress" aria-valuemin="0" aria-valuemax="100"><span class="pp-progress-fill"></span></div><div class="pp-sync-note native-turn-hint" hidden></div></div>
 <details class="pp-road" hidden><summary>View roadmap</summary><ol></ol></details>
 <div class="native-panel-footer"><span class="native-source"></span><button class="native-menu" aria-label="Pet settings">•••</button></div>
 </div></section></div>
@@ -480,6 +480,22 @@ function compactRoadmap(p){
  if(model.reviewing&&!kind)return {...model,visible:[{id:'review',label:'Reviewing your new request',status:'review'}],before:0,after:0};
  return model;
 }
+function roadmapProgressState(p){
+ const progress=p.progress,question=questionState(p),reviewing=!!p.roadmapNeedsUpdate,turn=p.turnState?.status;
+ const known=!reviewing&&!!progress&&Number.isInteger(progress.done)&&Number.isInteger(progress.total)&&progress.total>0&&progress.done>=0&&progress.done<=progress.total;
+ const countLabel=known?progress.done+' of '+progress.total+' roadmap steps complete':'';
+ const remaining=known?progress.total-progress.done:null;
+ const turnLabel=turn==='ended'?'Turn ended':turn==='interrupted'?'Turn stopped':turn==='running'?'Turn running':'';
+ const turnHint=!question&&remaining>0&&['ended','interrupted'].includes(turn)?(turn==='ended'?'This turn has ended. ':'This turn was stopped. ')+remaining+' roadmap '+(remaining===1?'step remains.':'steps remain.'):'';
+ const scope=reviewing?'Roadmap awaiting review; previous progress is not current.':known?'Reported roadmap progress: '+countLabel+'.':'No roadmap progress reported.';
+ const lead=question?(question.reviewing?'Awaiting review':question.label):turnLabel;
+ return {known,countLabel,remaining,percent:known?Math.round(100*progress.done/progress.total):null,turnHint,summary:(lead?lead+'. ':'')+scope};
+}
+function roadmapStatusLabel(status,p){
+ const question=questionState(p);
+ return ({done:'Completed',current:'In progress',pending:'Not marked complete',decision:question?.setup?'Setup needed':'Waiting for you',input:question?.setup?'Setup needed':'Information needed',review:question?.reviewing?'Awaiting review':'Reviewing request'})[status]||'Not marked complete';
+}
+function roadmapOverflowLabel(count,direction){return count+' '+direction+' '+(count===1?'step':'steps');}
 function activity(p){return questionState(p)?.reviewing?'idle':p.question?'attention':['ended','interrupted'].includes(p.turnState?.status)||['unavailable','disconnected','error'].includes(p.sourceStatus)?'idle':({waiting:'attention',paused:'idle',building:'reading',running:'reading',planning:'reading',checking:'reading',complete:'complete',completed:'complete'}[p.phase]||'idle');}
 /* PET_STATE_END */
 let setupAttempt=null,setupTimer=null,setupSequence=0;
@@ -520,19 +536,19 @@ function updateAnimation(p){
 function renderMini(p,panelVisible){
  const row=$('.native-roadmap');row.hidden=!!panelVisible;
  const model=compactRoadmap(p),question=questionState(p),kind=question?.attention;
+ const progress=roadmapProgressState(p);row.title=progress.summary+' Open roadmap';row.setAttribute('aria-label',progress.summary);
  const items=model.visible;
- const signature=JSON.stringify([items,model.before,model.after,model.reviewing,kind,question?.setup]);
+ const signature=JSON.stringify([items,model.before,model.after,model.reviewing,kind,question?.setup,progress.summary]);
  if(signature===miniSignature)return;miniSignature=signature;row.replaceChildren();
- const names={done:'Completed',current:'In progress',pending:'Not started',decision:question?.setup?'Setup needed':'Waiting for you',input:question?.setup?'Setup needed':'Information needed',review:question?.reviewing?'Awaiting review':'Reviewing request'};
  function button(label,status,index,overflow){
-  const b=document.createElement('button');b.type='button';b.className='mini-step'+(overflow?' mini-overflow':'');b.dataset.status=status;b.title=label+' · Open roadmap';b.setAttribute('aria-label',b.title);b.style.setProperty('--dot-index',index);
+  const b=document.createElement('button');b.type='button';b.className='mini-step'+(overflow?' mini-overflow':'');b.dataset.status=status;b.title=label+' · '+progress.summary+' Open roadmap';b.setAttribute('aria-label',b.title);b.style.setProperty('--dot-index',index);
   if(overflow)b.textContent=overflow;else{const dot=document.createElement('span');dot.className='mini-dot';dot.setAttribute('aria-hidden','true');b.append(dot)}
   b.onclick=()=>send({action:'togglePanel'});row.append(b);
  }
- if(model.before&&!model.reviewing)button(model.before+' earlier steps','pending',0,'+'+model.before);
- items.forEach((step,index)=>button((step.index===undefined?'':'Step '+(step.index+1)+': ')+step.label+' — '+names[step.status],step.status,index));
+ if(model.before&&!model.reviewing)button(roadmapOverflowLabel(model.before,'earlier'),'pending',0,'+'+model.before);
+ items.forEach((step,index)=>button((step.index===undefined?'':'Step '+(step.index+1)+': ')+step.label+' — '+roadmapStatusLabel(step.status,p),step.status,index));
  if(!items.length)button('No roadmap reported','pending',0);
- if(model.after&&!model.reviewing)button(model.after+' later steps','pending',0,'+'+model.after);
+ if(model.after&&!model.reviewing)button(roadmapOverflowLabel(model.after,'later'),'pending',0,'+'+model.after);
 }
 function startChildTimer(slot){
  if(childrenPaused||!slot.complete||slot.timer!==null)return;
@@ -643,10 +659,11 @@ window.renderPet=function(data){
  const reviewing=!!p.roadmapNeedsUpdate;
  text('.native-phase',phaseLabel(p));
  text('.pp-title',reviewing?'Reviewing your new request':p.currentStep||'');$('.pp-title').hidden=!!kind||(!reviewing&&!p.currentStep);
- const progress=p.progress;const known=!reviewing&&progress&&Number.isFinite(progress.done)&&Number.isFinite(progress.total)&&progress.total>0;
+ const progress=roadmapProgressState(p),known=progress.known;
  $('.native-no-plan').hidden=!!known;$('.pp-progress').hidden=!known;
  text('.native-no-plan',reviewing?(question?.reviewing?'Roadmap is waiting for review.':question?'Roadmap will update after this question is reviewed.':'Updating the roadmap before showing new progress.'):'No roadmap reported');
- if(known){const percent=Math.round(Math.min(100,Math.max(0,100*progress.done/progress.total)));text('.pp-progress-count',progress.done+' of '+progress.total+' steps done');text('.pp-progress-percent',percent+'%');$('.pp-progress-fill').style.width=percent+'%';$('.pp-progress-track').setAttribute('aria-valuenow',String(percent));}
+ if(known){const percent=progress.percent;text('.pp-progress-count',progress.countLabel);text('.pp-progress-percent',percent+'%');$('.pp-progress-fill').style.width=percent+'%';$('.pp-progress-track').setAttribute('aria-valuenow',String(percent));$('.pp-progress-track').setAttribute('aria-valuetext',progress.countLabel);}
+ text('.native-turn-hint',progress.turnHint);$('.native-turn-hint').hidden=!progress.turnHint;
  const steps=Array.isArray(p.steps)?p.steps:[];$('.pp-road').hidden=!steps.length;text('.pp-road summary',reviewing?'Previous roadmap':'View roadmap');const ol=$('.pp-road ol');ol.replaceChildren();
  roadmapState(p).all.forEach(step=>{const li=document.createElement('li');li.className='pp-step';li.dataset.status=step.status;const mark=document.createElement('span');mark.className='pp-step-mark';mark.textContent=({done:'✓',current:'›',decision:'?',input:'!'})[step.status]||'○';const label=document.createElement('span');label.textContent=step.label||'';li.append(mark,label);ol.append(li)});
  $('.pp-question').hidden=!question;text('.pp-question p',question?.reviewing?question.reviewCopy:question?.text||'');$('.pp-panel').dataset.waiting=String(!!question);$('.pp-panel').dataset.attention=attention||'';

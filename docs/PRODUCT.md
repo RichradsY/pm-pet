@@ -39,6 +39,8 @@
 - Target behavior: hidden-panel updates leave an unread indicator until the user views progress; the native unread indicator remains to be implemented.
 - The progress panel sits above the owl and can be hidden and reopened by clicking it.
 - When the panel is hidden, a compact row above the owl shows completed steps in green, the current step in deep green, and pending steps in gray. The affected step becomes yellow for a decision or red for required information. Dots have descriptive hover/keyboard labels and open the full roadmap.
+- Name the percentage as roadmap progress. When a turn ends with unfinished items, explain that roadmap work remains; do not imply a finished reply completed the project.
+- Gray steps mean not marked complete, not necessarily never started. Ending or interrupting a turn removes the running highlight without changing completion evidence.
 - Show at most seven nearby steps, centered on the affected/current step, with `+N` for earlier or later steps. A new request awaiting scope review shows a review ring instead of a stale completed roadmap. A prompt after an entirely completed plan still shows an attention dot.
 - Native double-click/menu navigation opens the exact conversation's Codex deep link; browser prototypes only demonstrate navigation.
 - Native size controls are in the Pet menu, with 75%, 100%, 125%, and 150% presets. The prototype also demonstrates collapsible appearance settings.

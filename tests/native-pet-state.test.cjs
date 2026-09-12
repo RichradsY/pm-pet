@@ -13,13 +13,14 @@ assert.equal(html.split(start).length, 2, 'Native view must expose one state blo
 assert.equal(html.split(end).length, 2, 'Native view must expose one state block');
 const source = html.split(start)[1].split(end)[0];
 const state = vm.runInNewContext(
-  `${source}\n({ attentionKind, phaseLabel, questionState, setupDeferRequest, setupDeferralState, completedTransitions, roadmapState, compactRoadmap, activity })`,
+  `${source}\n({ attentionKind, phaseLabel, questionState, setupDeferRequest, setupDeferralState, completedTransitions, roadmapState, compactRoadmap, roadmapProgressState, roadmapStatusLabel, roadmapOverflowLabel, activity })`,
   {},
   { filename: 'native/Resources/pet.html:PET_STATE', timeout: 1000 }
 );
 const plain = value => JSON.parse(JSON.stringify(value));
 const model = pet => plain(state.roadmapState(pet));
 const compact = pet => plain(state.compactRoadmap(pet));
+const progressModel = pet => plain(state.roadmapProgressState(pet));
 const questionModel = pet => plain(state.questionState(pet));
 const transitions = (previous, next) => plain(state.completedTransitions(previous, next));
 const step = (id, done = false, label = id) => ({ id, done, label });
@@ -635,4 +636,139 @@ test('a completed turn remains separate from delivery completion or interruption
   const stoppedWork = pet({ phase: 'building', turnState: { status: 'ended' } });
   assert.equal(state.activity(stoppedWork), 'idle');
   assert.deepEqual(statuses(stoppedWork), [['spec', 'done'], ['build', 'pending'], ['verify', 'pending']]);
+});
+
+const roadmapFixture = overrides => pet({
+  phase: 'idle', turnState: { status: 'ended' },
+  progress: { done: 2, total: 8, percent: 25 },
+  steps: Array.from({ length: 8 }, (_, index) => step(`deliverable-${index}`, index < 2)),
+  ...overrides
+});
+
+test('an ended turn keeps reported 2/8 roadmap progress and explains remaining scope', () => {
+  const snapshot = roadmapFixture(), before = JSON.stringify(snapshot);
+  const result = progressModel(snapshot);
+  assert.equal(result.countLabel, '2 of 8 roadmap steps complete');
+  assert.equal(result.percent, 25);
+  assert.equal(result.remaining, 6);
+  assert.equal(result.turnHint, 'This turn has ended. 6 roadmap steps remain.');
+  assert.equal(result.summary, 'Turn ended. Reported roadmap progress: 2 of 8 roadmap steps complete.');
+  assert.equal(model(snapshot).all.filter(item => item.status === 'pending').length, 6);
+  assert.equal(state.activity(snapshot), 'idle');
+  assert.equal(JSON.stringify(snapshot), before, 'Presentation never completes or rewrites reported work');
+});
+
+test('an interrupted turn retains progress with a distinct stopped message', () => {
+  const result = progressModel(roadmapFixture({ turnState: { status: 'interrupted' } }));
+  assert.equal(result.percent, 25);
+  assert.equal(result.turnHint, 'This turn was stopped. 6 roadmap steps remain.');
+  assert.match(result.summary, /^Turn stopped\. Reported roadmap progress: 2 of 8/);
+  assert.doesNotMatch(result.summary + result.turnHint, /ended|reply|needs you/i);
+});
+
+test('a single remaining roadmap step uses singular grammar', () => {
+  for (const status of ['ended', 'interrupted']) {
+    const result = progressModel(roadmapFixture({ progress: { done: 7, total: 8 }, turnState: { status } }));
+    assert.match(result.turnHint, /1 roadmap step remains\.$/);
+  }
+});
+
+test('all reported steps complete does not infer that the current turn has ended', () => {
+  const completed = roadmapFixture({ progress: { done: 8, total: 8 }, steps: Array.from({ length: 8 }, (_, index) => step(`d${index}`, true)) });
+  const ended = progressModel(completed);
+  assert.equal(ended.percent, 100);
+  assert.equal(ended.turnHint, '');
+  assert.match(ended.summary, /^Turn ended\. Reported roadmap progress: 8 of 8/);
+  const active = progressModel({ ...completed, phase: 'building', turnState: { status: 'running' } });
+  assert.equal(active.turnHint, '');
+  assert.match(active.summary, /^Turn running\./);
+  assert.doesNotMatch(active.summary, /ended/);
+});
+
+test('missing or invalid progress never invents a percentage or remaining-step hint', () => {
+  for (const progress of [null, undefined, { done: 0, total: 0 }, { done: -1, total: 8 }, { done: 9, total: 8 }, { done: 2.5, total: 8 }]) {
+    const result = progressModel(roadmapFixture({ progress }));
+    assert.equal(result.known, false);
+    assert.equal(result.percent, null);
+    assert.equal(result.remaining, null);
+    assert.equal(result.turnHint, '');
+    assert.equal(result.summary, 'Turn ended. No roadmap progress reported.');
+  }
+});
+
+test('a roadmap awaiting review does not present stale counts as current scope', () => {
+  const snapshot = roadmapFixture({ roadmapNeedsUpdate: true });
+  const result = progressModel(snapshot);
+  assert.equal(result.known, false);
+  assert.equal(result.percent, null);
+  assert.equal(result.turnHint, '');
+  assert.equal(result.countLabel, '');
+  assert.equal(result.summary, 'Turn ended. Roadmap awaiting review; previous progress is not current.');
+  assert.equal(compact(snapshot).visible[0].status, 'review');
+});
+
+test('running or unconfirmed idle turns do not get an ended-turn hint', () => {
+  for (const turnState of [null, { status: 'running' }, { status: 'input_received' }]) {
+    const result = progressModel(roadmapFixture({ phase: 'building', turnState }));
+    assert.equal(result.turnHint, '');
+    assert.equal(result.percent, 25);
+    assert.doesNotMatch(result.summary, /ended|stopped/);
+  }
+});
+
+test('questions and pending review take priority over the remaining-scope hint', () => {
+  for (const kind of ['decision', 'input']) {
+    const question = { id: 'synthetic-question', text: 'Choose a delivery option', kind };
+    for (const status of ['awaiting_reply', 'awaiting_review']) {
+      const snapshot = roadmapFixture({ question: { ...question, status } });
+      const result = progressModel(snapshot);
+      assert.equal(result.turnHint, '');
+      assert.equal(result.percent, 25);
+      assert.ok(result.summary.startsWith(status === 'awaiting_review' ? 'Awaiting review.' : kind === 'input' ? 'Information needed.' : 'Waiting for your reply.'));
+      assert.equal(compact(snapshot).visible.some(item => item.status === (status === 'awaiting_review' ? 'review' : kind)), true);
+    }
+  }
+});
+
+test('pending dot labels report missing completion evidence without asserting work never started', () => {
+  const snapshot = roadmapFixture();
+  assert.equal(state.roadmapStatusLabel('pending', snapshot), 'Not marked complete');
+  assert.equal(state.roadmapStatusLabel('done', snapshot), 'Completed');
+  assert.equal(state.roadmapStatusLabel('current', snapshot), 'In progress');
+  assert.doesNotMatch(state.roadmapStatusLabel('pending', snapshot), /not started/i);
+});
+
+test('compact overflow labels distinguish a single earlier or later step', () => {
+  for (const direction of ['earlier', 'later']) {
+    assert.equal(state.roadmapOverflowLabel(1, direction), `1 ${direction} step`);
+    assert.equal(state.roadmapOverflowLabel(3, direction), `3 ${direction} steps`);
+  }
+});
+
+test('compact accessible summary and dot tooltips update when only turn state changes', () => {
+  const node = () => ({
+    dataset: {}, attributes: {}, children: [], style: { setProperty() {} },
+    setAttribute(name, value) { this.attributes[name] = value; },
+    append(child) { this.children.push(child); },
+    replaceChildren() { this.children = []; }
+  });
+  const row = node();
+  const renderSource = html.slice(html.indexOf('function renderMini('), html.indexOf('function startChildTimer('));
+  const render = vm.runInNewContext(`${source}\nlet miniSignature = null;\n${renderSource}\nrenderMini`, {
+    $: () => row, document: { createElement: node }, send() {}
+  });
+  const snapshot = roadmapFixture({ turnState: null });
+  render(snapshot, false);
+  assert.doesNotMatch(row.attributes['aria-label'], /Turn ended/);
+  render({ ...snapshot, turnState: { status: 'ended' } }, false);
+  assert.match(row.title, /^Turn ended\. Reported roadmap progress: 2 of 8/);
+  assert.match(row.attributes['aria-label'], /^Turn ended\./);
+  assert.equal(row.children.filter(child => child.dataset.status === 'done').length, 2);
+  const pending = row.children.find(child => child.dataset.status === 'pending');
+  assert.match(pending.title, /Not marked complete/);
+  assert.match(pending.title, /Turn ended\. Reported roadmap progress: 2 of 8/);
+  assert.equal(pending.attributes['aria-label'], pending.title);
+  render({ ...snapshot, turnState: { status: 'interrupted' } }, true);
+  assert.equal(row.hidden, true, 'Opening the panel still hides the compact view');
+  assert.match(row.title, /^Turn stopped\./);
 });

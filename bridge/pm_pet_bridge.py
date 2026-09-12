@@ -39,6 +39,7 @@ MAX_INPUT_TOMBSTONES = 256
 MAX_FEEDBACK_MESSAGES = 32
 MAX_DEFERRED_INPUT_REPLIES = 128
 MAX_PENDING_TURN_ENDS = 16
+MAX_PENDING_PLAN_EVENTS = 2
 # Native state/ack readers accept 4 MiB. New question admission uses half of that
 # across the entire registry, leaving room for roadmaps, outcomes, and envelopes.
 MAX_QUESTION_STATE_BYTES = 2 * 1024 * 1024
@@ -419,6 +420,7 @@ class Bridge:
                    "steps": [], "question": None, "sourceUpdatedAt": None, "sourceStatus": "connecting",
                    "children": [], "generation": 0, "lastReportSequence": -1, "planVersion": 0,
                    "roadmapNeedsUpdate": False, "requestObservedAt": None, "planReviewedAt": None,
+                   "planObservedAt": None, "pendingPlanEvents": [],
                    "turnState": None}
             self.state["pets"].append(pet)
         pet["enabled"] = True
@@ -1094,6 +1096,74 @@ class Bridge:
             self.changed = True
         return True
 
+    def remember_plan_event(self, pet, turn_id, observed, plan):
+        # At most two unmatched turns per Pet, each with the same bounded plan
+        # shape as the visible roadmap. Cache admission is not accepted evidence.
+        pending = pet.get("pendingPlanEvents", [])
+        previous = next((item for item in pending if item["turnId"] == turn_id), None)
+        if previous and previous["observedAt"] >= observed:
+            return
+        candidate = {"turnId": turn_id, "observedAt": observed, "plan": plan}
+        retained = [item for item in pending if item["turnId"] != turn_id] + [candidate]
+        retained = sorted(retained, key=lambda item: item["observedAt"])[-MAX_PENDING_PLAN_EVENTS:]
+        if retained != pending:
+            pet["pendingPlanEvents"] = retained
+            self.changed = True
+
+    def apply_pending_plan_events(self, pet):
+        current_turn = (pet.get("turnState") or {}).get("turnId")
+        pending = pet.get("pendingPlanEvents", [])
+        matching = [item for item in pending if item["turnId"] == current_turn]
+        if not matching:
+            return
+        pet["pendingPlanEvents"] = [item for item in pending if item["turnId"] != current_turn]
+        self.changed = True
+        for item in matching:
+            # Recheck the latest scope/report/question after establishing identity.
+            self.observe_plan_event(pet, {"turn_id": current_turn, "plan": item["plan"]}, item["observedAt"])
+
+    def observe_plan_event(self, pet, payload, observed):
+        # Plan evidence has its own clock: a later turn-end discovered on another
+        # shard must not consume a still-new plan. Explicit reviews and new user
+        # scope remain authoritative, including timestamp ties and replay.
+        if not observed or pet.get("question"):
+            return
+        floor = max((pet.get(key) or "") for key in
+                    ("planObservedAt", "reportObservedAt", "planReviewedAt", "requestObservedAt"))
+        if observed <= floor:
+            return
+        turn_id = payload.get("turn_id")
+        if turn_id is not None:
+            if not isinstance(turn_id, str) or not turn_id.strip() or len(turn_id) > 200:
+                return
+        plan = payload.get("plan")
+        if not (isinstance(plan, list) and plan and all(
+            isinstance(item, dict) and isinstance(item.get("step"), str)
+            and item.get("status") in ("pending", "in_progress", "completed") for item in plan
+        )):
+            return
+        bounded_plan = [{"step": item["step"][:200], "status": item["status"]} for item in plan[:100]]
+        current_turn = (pet.get("turnState") or {}).get("turnId")
+        if turn_id and current_turn and turn_id != current_turn:
+            self.remember_plan_event(pet, turn_id, observed, bounded_plan)
+            return
+        steps = [{"id": "plan-%d" % index, "label": item["step"][:200],
+                  "done": item["status"] == "completed"} for index, item in enumerate(bounded_plan)]
+        current = next((index for index, item in enumerate(bounded_plan) if item["status"] == "in_progress"), None)
+        pet["steps"] = steps
+        pet["currentStepId"] = steps[current]["id"] if current is not None else None
+        pet["currentStep"] = steps[current]["label"] if current is not None else ""
+        done = sum(1 for step in steps if step["done"])
+        pet["progress"] = {"done": done, "total": len(steps), "percent": round(100 * done / len(steps))}
+        pet["planVersion"] += 1
+        pet["planObservedAt"] = observed
+        # A typed plan does not resolve a decision or acknowledge scope review.
+        # It also cannot rewind the phase or the independently observed turn.
+        if not pet.get("sourceUpdatedAt") or observed > pet["sourceUpdatedAt"]:
+            pet["sourceUpdatedAt"] = observed
+            pet["sourceStatus"] = "connected"
+        self.changed = True
+
     def apply_event(self, pet, event):
         kind = event.get("type")
         payload = event.get("payload") or {}
@@ -1112,6 +1182,7 @@ class Bridge:
         if event_type in ("task_started", "task_complete", "turn_aborted"):
             if not self.observe_turn_state(pet, event_type, payload, observed):
                 return
+            self.apply_pending_plan_events(pet)
         if event_type == "token_count":
             self.observe_quota(pet, quota_snapshot(payload.get("rate_limits"), observed))
             return
@@ -1127,10 +1198,12 @@ class Bridge:
                     return
                 self.observe_turn_state(pet, "user_message", payload, observed)
                 if self.observe_input_reply(pet, item, observed):
+                    self.apply_pending_plan_events(pet)
                     return
                 self.observe_feedback_message(pet, item, observed)
                 previous_request = pet.get("requestObservedAt")
                 if request_id == pet.get("requestMessageId") or (previous_request and observed <= previous_request):
+                    self.apply_pending_plan_events(pet)
                     return
                 pet["requestObservedAt"] = observed
                 pet["requestMessageId"] = request_id
@@ -1145,6 +1218,7 @@ class Bridge:
                     pet["sourceUpdatedAt"] = observed
                     pet["sourceStatus"] = "connected"
                 self.changed = True
+                self.apply_pending_plan_events(pet)
                 return
             if isinstance(item, dict) and item.get("type") == "SubAgentActivity":
                 child_id, activity = item.get("agent_thread_id"), item.get("kind")
@@ -1164,6 +1238,9 @@ class Bridge:
                 # "interacted" alone does not prove a finished child has resumed work.
             # Tool outputs and prose cannot create questions/plans; child freshness is independent.
             return
+        if event_type in ("plan_updated", "update_plan"):
+            self.observe_plan_event(pet, payload, observed)
+            return
         if pet.get("reportObservedAt") and observed and observed < pet["reportObservedAt"]:
             return
         if not observed or (pet.get("eventObservedAt") and observed < pet["eventObservedAt"]):
@@ -1176,20 +1253,6 @@ class Bridge:
                 if event_type == "task_complete" and not pet.get("roadmapNeedsUpdate") and pet["progress"] and pet["progress"]["done"] == pet["progress"]["total"]:
                     pet["phase"] = "complete"
             touched = True
-        elif event_type in ("plan_updated", "update_plan") and not pet["question"]:
-            plan = payload.get("plan")
-            if isinstance(plan, list) and plan and all(isinstance(item, dict) and isinstance(item.get("step"), str) and item.get("status") in ("pending", "in_progress", "completed") for item in plan):
-                steps = [{"id": "plan-%d" % index, "label": item["step"][:200], "done": item["status"] == "completed"} for index, item in enumerate(plan[:100])]
-                pet["steps"] = steps
-                if pet.get("currentStepId") and not any(step["id"] == pet["currentStepId"] and not step["done"] for step in steps):
-                    pet["currentStepId"] = None
-                done = sum(1 for item in steps if item["done"])
-                pet["progress"] = {"done": done, "total": len(steps), "percent": round(100 * done / len(steps))}
-                current = next((item["step"] for item in plan if item["status"] == "in_progress"), None)
-                if current:
-                    pet["currentStep"] = current[:200]
-                pet["planVersion"] += 1
-                touched = True
         if touched:
             pet["eventObservedAt"] = observed
             if not pet.get("sourceUpdatedAt") or observed > pet["sourceUpdatedAt"]:

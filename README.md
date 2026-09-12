@@ -123,6 +123,14 @@ Roadmap dots use **green** for completed, **deep green** for current, **gray** f
 
 To rename a Pet, double-click its name or choose **Rename Pet…** from its menu. You can also focus the name and press Enter or F2. Enter or leaving the field saves; Esc cancels. Names must contain 1–100 characters and persist across restarts. Renaming a Pet does not change the Codex conversation's title or identity. If saving fails or cannot be confirmed, the editor keeps your draft and shows a message.
 
+### What the progress measures
+
+Progress covers the **reported roadmap**, which may span several Codex turns. A finished reply does not mean every roadmap item is finished. For example, completing two preparation steps can leave six drafting and review steps for later: the roadmap correctly remains at **2 of 8**, even after that turn ends.
+
+The panel names this **Roadmap progress** and explains when a turn has ended with steps remaining. Gray dots mean **not marked complete**; a step may be planned for later or partly done. Only a verified plan update changes its completion status.
+
+![Sample PM Pet showing an ended turn with 2 of 8 roadmap steps complete and 6 remaining](docs/assets/roadmap-progress.png)
+
 ### When Codex stops to ask
 
 When Codex finishes its current turn, the panel says **Turn ended**. An unanswered question stays visible with **This turn has ended. Reply in Codex to continue.** The conversation remains available for your next message. Open the matching conversation and submit your answer on its question card or send it as a normal chat message. Opening the conversation alone does not submit a reply.

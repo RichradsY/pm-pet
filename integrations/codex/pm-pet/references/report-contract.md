@@ -27,6 +27,8 @@ Example structure (replace the example items and counters with the actual curren
 - `currentStepId` optionally identifies the exact pending step to highlight. It must exist in the reported plan and must not be done. It is cleared when that step completes or leaves the plan.
 - A new structured user request sets `roadmapNeedsUpdate`. Review its impact, then send both the full `steps` and `currentStep` to acknowledge the plan. Phase-only reports do not clear this flag. The Pet keeps the previous steps available but withholds their percentage until the plan is reviewed.
 - Reported progress remains separate from observed turn activity. A finished Codex turn does not mark unfinished delivery items complete.
+- Keep the reported scope clear: a roadmap may cover the current request or a longer project, but its count should use that scope consistently. Before a final reply, report the items actually finished and retain future work as pending. Use `idle` when this turn's work stops with roadmap items remaining; reserve `complete` for a fully completed roadmap.
+- If the reply finishes a small part of a longer roadmap, briefly explain what is finished and what remains. Do not turn future items green merely to make the Pet match the end of the reply.
 
 To surface a real question, send the current generation and next sequence with:
 
