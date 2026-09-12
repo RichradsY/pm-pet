@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Clarify that progress measures the reported roadmap, which may span multiple turns. Explain remaining work after a turn ends or is interrupted, and label gray dots as not marked complete instead of assuming they were never started.
+- Keep plan updates ordered independently from turn activity so a delayed plan is not discarded just because a newer turn-ending event arrived first. Preserve newer reports, request boundaries, and pending-question protections, and synchronize the current step with each accepted plan.
 - Add conditional automatic quota reads through Codex CLI App Server, without model prompts. Match file-based login metadata to the last genuine Desktop account check, pin each reader to the same credential store and `CODEX_HOME`, and reject account or auth-file changes during a read. Raw account IDs, tokens, and credit balances are not retained in Pet state.
 - Share one quota worker across Pets: schedule after successful reads at 60 seconds during confirmed running work or 300 seconds while idle/awaiting a reply. Hide-all and disable-all cancel polling; failures back off with truthful cached age, and account mismatch shows unavailable. Add Auto, Checking, Retry, and Account check needed states. Automatic updates require an initial Desktop usage check and an optional installed CLI with matching ChatGPT file authentication; the standalone probe remains unverified.
 - Clarify installation once versus explicit enable in every new root Codex task. Starting the app restores saved enabled Pets; it does not bind new conversations or re-enable disabled ones.
