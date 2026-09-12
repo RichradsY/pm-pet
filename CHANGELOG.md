@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Keep pending questions and their reply action above progress and long roadmaps. New question IDs reset the panel to the top; ordinary refreshes preserve reading position. Long question text and expanded roadmaps scroll independently while the reply action stays visible.
 - Added a compact overhead roadmap with semantic state dots, current-step focus, overflow counts, and completion-synchronized orbit animation. Prompts remain visible even after a completed roadmap.
 - Added red required-information reminders alongside yellow decisions, linked to an optional pending step and original input destination. System password detection remains unavailable; input reminders require explicit agent reports.
 - Remove the owl's pale outer halo and use rounded native glass for compact controls, with a Reduce Transparency fallback. Quota freshness remains a small unboxed line below its compact pill.

@@ -239,6 +239,12 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent
 #pm-pet-desktop .pp-progress-fill{background:var(--pp-accent)}
 #pm-pet-desktop .pp-question{background:light-dark(#efc57421,#f5c57816);border:1px solid light-dark(#ab781d26,#eec77833);border-radius:12px}
 #pm-pet-desktop .pp-question p{font-size:12px;overflow-wrap:anywhere}
+#pm-pet-desktop .pp-panel[data-waiting=true]{display:flex;flex-direction:column;overflow:hidden}
+#pm-pet-desktop .pp-panel[data-waiting=true]>:not(.pp-road){flex:none}
+#pm-pet-desktop .pp-panel[data-waiting=true] .pp-question{margin:10px 0 12px}
+#pm-pet-desktop .pp-panel[data-waiting=true] .pp-question p{max-height:112px;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin}
+#pm-pet-desktop .pp-question p:focus-visible{outline:2px solid var(--pp-accent);outline-offset:2px;border-radius:3px}
+#pm-pet-desktop .pp-panel[data-waiting=true] .pp-road{flex:1 1 auto;min-height:22px;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin}
 #pm-pet-desktop .pp-return{background:light-dark(#fcfffa66,#edfff112);border-color:var(--pp-glass-edge);font-weight:500}
 #pm-pet-desktop .native-no-plan{font-size:12px;color:var(--pp-muted);margin:7px 0}
 #pm-pet-desktop .native-panel-footer{display:flex;justify-content:space-between;gap:8px;margin-top:9px;align-items:center;color:var(--pp-muted);font-size:10px}
@@ -272,10 +278,10 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent
 </section>
 <section data-surface="panel" hidden><div class="pp-panel" role="region" aria-label="Build progress">
 <div class="pp-header"><span class="native-title"></span><div class="pp-header-right"><span class="native-phase"></span><button class="pp-close" aria-label="Hide progress">×</button></div></div>
+<div class="pp-question" hidden><span class="pp-question-label">Your decision</span><p tabindex="0" aria-label="Question details"></p><div class="native-input-hint" hidden></div><button class="pp-return">Answer in Codex ↗</button></div>
 <div class="pp-title"></div><div class="native-no-plan">No roadmap reported</div>
 <div class="pp-progress" hidden><div class="pp-progress-meta"><span class="pp-progress-count"></span><span class="pp-progress-percent"></span></div><div class="pp-progress-track" role="progressbar" aria-label="Roadmap completion" aria-valuemin="0" aria-valuemax="100"><span class="pp-progress-fill"></span></div></div>
 <details class="pp-road" hidden><summary>View roadmap</summary><ol></ol></details>
-<div class="pp-question" hidden><span class="pp-question-label">Your decision</span><p></p><div class="native-input-hint" hidden></div><button class="pp-return">Answer in Codex ↗</button></div>
 <div class="native-panel-footer"><span class="native-source"></span><button class="native-menu" aria-label="Pet settings">•••</button></div>
 </div></section></div>
 <script>
@@ -288,7 +294,7 @@ root.querySelectorAll('[data-surface]').forEach(e=>e.hidden=e.dataset.surface!==
 const send=body=>window.webkit?.messageHandlers?.pet?.postMessage(body);
 const owl=$('.pp-pet');
 const themes={sage:['#638f7c','#e1eee5','#80a88f','#86ad95'],sky:['#628faf','#deebf5','#83a4bd','#8faec5'],lilac:['#9b7baf','#efe6f6','#aa92b7','#b49fc0'],rose:['#b27889','#f6e4e9','#c38e8c','#c99b99'],sand:['#aa8960','#f3eada','#b89a72','#c7a981']};
-let priorPet=null,magicTimer=null,currentPet=null,clickTimer=null,miniSignature='';
+let priorPet=null,magicTimer=null,currentPet=null,clickTimer=null,miniSignature='',displayedQuestionKey=null;
 const childSlots=Array.from(root.querySelectorAll('.pp-baby'),el=>({el,id:null,timer:null,remaining:0,startedAt:0,complete:null}));
 let childrenPaused=false;
 function text(selector,value){$(selector).textContent=value??''}
@@ -442,7 +448,7 @@ window.renderPet=function(data){
  text('.native-title',p.title||'Codex conversation');
  const reviewing=!!p.roadmapNeedsUpdate;
  text('.native-phase',kind==='input'?'Input needed':kind?'Feedback needed':reviewing?'Planning':({building:'Building',running:'Building',planning:'Planning',checking:'Checking',waiting:'Needs you',complete:'Complete',completed:'Complete',idle:'Idle',paused:'Paused',error:'Source error'}[p.phase]||'Connected'));
- text('.pp-title',reviewing?'Reviewing your new request':p.currentStep||'');$('.pp-title').hidden=!reviewing&&!p.currentStep;
+ text('.pp-title',reviewing?'Reviewing your new request':p.currentStep||'');$('.pp-title').hidden=!!kind||(!reviewing&&!p.currentStep);
  const progress=p.progress;const known=!reviewing&&progress&&Number.isFinite(progress.done)&&Number.isFinite(progress.total)&&progress.total>0;
  $('.native-no-plan').hidden=!!known;$('.pp-progress').hidden=!known;
  text('.native-no-plan',reviewing?'Updating the roadmap before showing new progress.':'No roadmap reported');
@@ -453,6 +459,9 @@ window.renderPet=function(data){
  const destination=p.question?.destination||'codex';text('.pp-question-label',kind==='input'?'Information needed':'Your decision');
  $('.native-input-hint').hidden=kind!=='input'||destination==='codex';text('.native-input-hint',destination==='system'?'Input location · System window':'Input location · Terminal');
  text('.pp-return',kind==='input'?(destination==='codex'?'Provide info in Codex ↗':'Open Codex ↗'):'Answer in Codex ↗');
+ const questionKey=p.question?JSON.stringify([p.id,p.generation,p.question.id]):null;
+ if(questionKey&&questionKey!==displayedQuestionKey){$('.pp-panel').scrollTop=0;$('.pp-question p').scrollTop=0;$('.pp-road').scrollTop=0;}
+ displayedQuestionKey=questionKey;
  const stamp=dateText(p.sourceUpdatedAt);const status=['disconnected','connecting'].includes(p.sourceStatus)?'Waiting for Codex':p.sourceStatus==='stale'?'Last reported state':['error','unavailable'].includes(p.sourceStatus)?'Source unavailable':['connected','reported'].includes(p.sourceStatus)?'From Codex':'Awaiting update';
  text('.native-source',status+(stamp?' · '+stamp:''));$('.native-source').title=dateTooltip(p.sourceUpdatedAt);measure();
 };
