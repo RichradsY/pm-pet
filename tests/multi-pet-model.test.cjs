@@ -98,27 +98,49 @@ test('all five Pets may show quota explicitly without creating five snapshots', 
   assert.equal(store.toJSON().quota.windows.week.remainingPercent, 71);
 });
 
-test('poll cadence is shared: running 60s, idle/waiting 300s, hidden/disabled off', () => {
+test('poll cadence is shared at 60s whenever an enabled Pet shows quota, independent of activity', () => {
   const store = make();
   assert.equal(store.pollIntervalMs(), null);
   store.enable(id(0));
   assert.equal(store.pollIntervalMs(), 60000);
+  for (const phase of ['planning', 'building', 'checking', 'idle', 'complete']) {
+    store.setPhase(id(0), phase);
+    assert.equal(store.pollIntervalMs(), 60000, phase + ' does not change the shared cadence');
+  }
   store.setPhase(id(0), 'idle');
-  assert.equal(store.pollIntervalMs(), 300000);
-  store.enable(id(1)); // Running with quota hidden still speeds up the shared visible quota.
+  store.enable(id(1)); // A hidden running Pet does not change the visible account-wide cadence.
   assert.equal(store.pollIntervalMs(), 60000);
   store.ask(id(1), 'Choose the billing policy');
-  assert.equal(store.pollIntervalMs(), 300000);
+  assert.equal(store.pollIntervalMs(), 60000);
   store.setQuotaVisible(id(0), false);
   assert.equal(store.pollIntervalMs(), null);
   store.setQuotaVisible(id(1), true);
-  assert.equal(store.pollIntervalMs(), 300000);
+  assert.equal(store.pollIntervalMs(), 60000);
   store.resolve(id(1), 'Monthly billing');
   assert.equal(store.pollIntervalMs(), 60000);
   store.disable(id(1));
   assert.equal(store.pollIntervalMs(), null);
   store.disable(id(0));
   assert.equal(store.pollIntervalMs(), null);
+});
+
+test('all visible Pet copies share one cadence and preserve quota when hidden or disabled', () => {
+  const store = make();
+  for (let index = 0; index < 5; index++) {
+    store.enable(id(index));
+    store.setQuotaVisible(id(index), true);
+    store.setPhase(id(index), 'idle');
+  }
+  const snapshot = store.setQuota({ windows: { week: { remainingPercent: 72, windowDurationMins: 10080 } }, observedAt: 'synthetic-observation' });
+  assert.equal(store.pollIntervalMs(), 60000);
+  for (let index = 0; index < 5; index++) store.setQuotaVisible(id(index), false);
+  assert.equal(store.pollIntervalMs(), null);
+  assert.deepEqual(store.getQuota(), snapshot);
+  store.setQuotaVisible(id(4), true);
+  assert.equal(store.pollIntervalMs(), 60000);
+  for (let index = 0; index < 5; index++) store.disable(id(index));
+  assert.equal(store.pollIntervalMs(), null);
+  assert.deepEqual(store.getQuota(), snapshot);
 });
 
 test('getters and persistence snapshots cannot mutate state; replacing plan changes honest progress', () => {

@@ -94,16 +94,33 @@ test('epoch seconds and milliseconds preserve timestamp provenance; a new snapsh
 });
 
 test('verified automatic source names the last Desktop match and the actual polling interval', () => {
-  for (const [intervalSeconds, cadence] of [[60, /every 60 seconds while working/], [300, /every 5 minutes while idle/], [120, /every 120 seconds/]]) {
+  for (const [intervalSeconds, cadence] of [[60, /every 60 seconds while quota is shown/], [300, /every 300 seconds/], [120, /every 120 seconds/]]) {
     const quota = fixture({ source: 'codex-cli-verified', refresh: { mode: 'automatic', intervalSeconds, nextAttemptAt: '2026-01-01T12:01:00Z' } });
     const result = model(quota);
     assert.equal(result.provenance, 'Auto');
     assert.equal(result.freshness, 'Remaining · Auto · 1m ago');
     assert.match(result.tooltip, /Codex CLI, matched to the last Desktop account check/);
     assert.match(result.tooltip, cadence);
-    assert.doesNotMatch(result.tooltip, /permanent|live/i);
+    assert.doesNotMatch(result.tooltip, /permanent|live|while working|while idle/i);
     assert.deepEqual(result.windows, model(fixture()).windows);
   }
+});
+
+test('unknown cadence does not infer 60 seconds and quota checks do not depend on task activity', () => {
+  const quota = fixture({ source: 'codex-cli-verified', refresh: { mode: 'automatic', intervalSeconds: 60 } });
+  const baseline = model(quota);
+  for (const pet of [
+    { phase: 'building', turnState: { status: 'running' } },
+    { phase: 'idle', turnState: { status: 'ended' } },
+    { phase: 'waiting', question: { id: 'synthetic-question', text: 'Choose a direction' } }
+  ]) {
+    const result = JSON.parse(JSON.stringify(state.quotaState(quota, { ...pet, quotaVisible: true }, now)));
+    assert.equal(result.tooltip, baseline.tooltip);
+    assert.equal(result.observedAt, baseline.observedAt);
+  }
+  const unknown = model({ ...quota, refresh: { mode: 'automatic', intervalSeconds: null } });
+  assert.match(unknown.tooltip, /Automatic usage checks are enabled/);
+  assert.doesNotMatch(unknown.tooltip, /every|60 seconds|working|idle/);
 });
 
 test('refreshing and paused states keep the last observed quota age and value', () => {
@@ -129,6 +146,8 @@ test('a transport failure shows retry only when the bridge actually schedules on
   assert.match(scheduled.tooltip, /Cached snapshot/);
   assert.match(scheduled.tooltip, /timed out/);
   assert.match(scheduled.tooltip, /Next attempt 2026-01-01T12:01:00.000Z/);
+  assert.match(scheduled.tooltip, /Normal check interval: 60 seconds while quota is shown/);
+  assert.doesNotMatch(scheduled.tooltip, /Checks every/, 'Backoff must not be described as the normal fixed cadence');
   assert.equal(model(quota, now + 60000).ageLabel, '9m ago', 'A failed attempt must not refresh the snapshot timestamp');
   const unscheduled = model({ ...quota, refresh: { ...refresh, nextAttemptAt: null } });
   assert.equal(unscheduled.freshness, 'Remaining · Check failed · 8m ago');

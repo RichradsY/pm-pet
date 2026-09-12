@@ -1,4 +1,4 @@
-"""One nonblocking quota reader per bridge, independent from model activity."""
+"""One shared quota reader every minute while a verified allowance is visible."""
 from datetime import datetime, timezone
 import queue
 import re
@@ -11,8 +11,9 @@ def iso_at(seconds):
 
 
 class QuotaScheduler:
-    ACTIVE_SECONDS = 60
-    IDLE_SECONDS = 300
+    REFRESH_INTERVAL_SECONDS = 60
+    MIN_ATTEMPT_INTERVAL_SECONDS = 10
+    MAX_RETRY_INTERVAL_SECONDS = 1800
 
     def __init__(self, reader, monotonic=time.monotonic, wall_clock=time.time):
         self.reader = reader
@@ -46,8 +47,7 @@ class QuotaScheduler:
         now = self.clock()
         enabled = [pet for pet in pets if pet.get("enabled")]
         visible = any(pet.get("quotaVisible") for pet in enabled)
-        active = any((pet.get("turnState") or {}).get("status") == "running" and not pet.get("question") for pet in enabled)
-        interval = self.ACTIVE_SECONDS if active else self.IDLE_SECONDS
+        interval = self.REFRESH_INTERVAL_SECONDS
         fingerprint = (binding or {}).get("fingerprint")
         valid = isinstance(fingerprint, str) and bool(re.fullmatch(r"[0-9a-f]{64}", fingerprint))
         context = (fingerprint, binding.get("observedAt")) if valid and visible else None
@@ -66,9 +66,9 @@ class QuotaScheduler:
             self.meta["mode"] = "automatic" if context else "paused" if not visible else "waiting_for_account"
             # A new account check warrants one read; restoring the same context
             # still respects the global minimum interval across hidden/visible.
-            minimum = self.last_attempt + 10 if self.last_attempt is not None else now
+            minimum = self.last_attempt + self.MIN_ATTEMPT_INTERVAL_SECONDS if self.last_attempt is not None else now
             if context and self.last_success is not None:
-                minimum = max(minimum, self.last_success + self.ACTIVE_SECONDS)
+                minimum = max(minimum, self.last_success + interval)
             self.schedule(max(now, minimum) if context else None, now)
         elif not context:
             self.meta["mode"] = "paused" if not visible else "waiting_for_account"
@@ -95,12 +95,10 @@ class QuotaScheduler:
                     self.failures += 1
                     code = result.get("errorCode", "read_failed")
                     self.meta.update(mode="error", errorCode=code)
-                    self.schedule(now + max(interval, min(1800, 60 * 2 ** min(self.failures - 1, 5))), now)
+                    self.schedule(now + min(self.MAX_RETRY_INTERVAL_SECONDS,
+                                            interval * 2 ** min(self.failures - 1, 5)), now)
 
-        previous_interval = self.meta.get("intervalSeconds")
         self.meta["intervalSeconds"] = interval if context else None
-        if context and previous_interval is not None and previous_interval != interval and self.last_success is not None and not self.failures:
-            self.schedule(max(now, self.last_success + interval), now)
         if context and self.worker is None and self.next_due is not None and now >= self.next_due:
             self.last_attempt = now
             self.meta.update(mode="refreshing", lastAttemptAt=iso_at(self.wall_clock()), nextAttemptAt=None)
