@@ -1,6 +1,20 @@
 # Native app development plan
 
-Status: native app planning, 2026-09-12. A five-Pet browser interaction prototype is available in `prototypes/pm-pet-multi.html`. No native app, helper, skill package, live adapter, or installer has been implemented. The tagged prototype remains `0.1.0-prototype.1`; the new design is an unreleased development change.
+Status: unreleased native developer integration, 2026-09-12. The repository now contains a Swift/AppKit app, a local helper/bridge, and uninstalled Codex skill source. The five-Pet browser prototype remains available in `prototypes/pm-pet-multi.html`. The tagged prototype and `VERSION` remain `0.1.0-prototype.1`; there is no consumer installer or downloadable app release.
+
+## Current implementation
+
+| Area | Available now | Remaining validation or development |
+| --- | --- | --- |
+| Conversation binding | Explicit enable, exact UUID/session-metadata validation, five-root-Pet limit, idempotent enable | Two simultaneous real root conversations, wider Codex-version compatibility |
+| Native UI | Independent owl/progress surfaces, colors, dragging, size presets, per-Pet quota visibility, menu controls | Full-Pet hiding, unread progress, broader display/accessibility checks |
+| Progress and decisions | Main-agent roadmap/question reports, generation/sequence validation, matching question resolution | Automatic integration discovery and sustained reporting across sessions |
+| Activity | Recorded root/child events; child identity stays with its owning Pet | Broader transcript-format and resumed-child coverage |
+| Quota | Shared cached general Codex snapshot, timestamp/age, weekly-only handling | Verified Desktop account binding and automatic live refresh |
+| Lifecycle | Acknowledged launch/rendering, disable/re-enable, quit/restart tested on the development Mac | Consumer installation, update, uninstall, and other-machine tests |
+| Execution control | Explicitly unavailable in the adapter | Confirmed pause/review/resume of the owning build tree |
+
+Run `python3 scripts/pm-pet.py enable --title "My build"` from the owning Codex conversation. The first launch may need macOS/Codex approval. See [Local Codex integration](LOCAL-INTEGRATION.md) for exact commands and the current capability boundary.
 
 ## Updated product contract
 
@@ -26,15 +40,15 @@ Proposed defaults:
 - The first-ever newly enabled Pet starts with quota visible; additional new bindings start with quota hidden. Existing visibility preferences survive disable/re-enable.
 - Hiding or disabling a Pet never transfers its quota display to another. All displays may be hidden; restore quota through any Pet's settings or menu entry.
 
-These defaults are implementation proposals, not claims about current Codex behavior.
+Enable defaults, capacity, and per-Pet quota preferences are implemented in the developer build. Confirmed whole-build pausing and a global-disable menu item remain target behavior; explicit `disable --all` is available through the helper.
 
 ## Conversation entry point
 
-The intended explicit command is `$pm-pet enable` or `$pm-pet disable` in the current conversation. A user can also ask the assistant in ordinary language to invoke the same installed integration. These are planned custom skill actions, not built-in Codex commands or a skill available today.
+The current entry point is the source-checkout helper: `python3 scripts/pm-pet.py enable` or `disable`. A user can ask the assistant to call that helper from the owning conversation. The included [skill source](../integrations/codex/pm-pet/SKILL.md) describes the same flow but is not installed or automatically discoverable. `$pm-pet` will be a custom skill invocation after explicit setup, not a built-in Codex command.
 
 Codex documents explicit skill invocation and optional `allow_implicit_invocation: false`. Use an explicitly invoked integration for lifecycle changes; do not infer enable/disable requests by searching transcripts for those words. Quoted text, tool output, and historical instructions must not toggle a Pet. [Build skills](https://learn.chatgpt.com/docs/build-skills)
 
-The skill invokes a small bundled `pm-pet` helper, passing the current conversation context. The helper validates that identity, contacts the app, and reports success only after the app acknowledges the requested state. Enabling may launch the app; disabling must not launch a closed app just to show a Pet.
+The source skill invokes the checkout helper using the current conversation context. The helper validates that identity, contacts the app, and reports enable success only after the corresponding native views acknowledge rendering. Enabling may build and launch the app; disabling does not launch a closed app.
 
 Installation of the skill or plugin is a separate onboarding action. Document any session restart/new-session requirement and verify how this existing conversation can discover it. Until discovery is confirmed, the same helper can be explicitly called from the current conversation for a local test. Do not promise hot-loading. [Plugins](https://learn.chatgpt.com/docs/plugins)
 
@@ -42,27 +56,29 @@ No verified public extension currently establishes a persistent switch in Codex'
 
 ### Identity and control
 
-Use `(provider, host, conversationID)` as the binding key. Store project/workspace information separately. Never choose a conversation by its title, shared working directory, or most recently modified transcript alone.
+The current adapter supports local Codex only and keys bindings by exact conversation UUID, validated against session metadata. Extend the key to `(provider, host, conversationID)` before adding other providers or remote hosts. Never choose a conversation by its title, shared working directory, or most recently modified transcript alone.
 
-`CODEX_THREAD_ID` has been observed in this runtime. Its behavior still needs checks in a normal root conversation, a second conversation in the same workspace, a restored conversation, and a child agent. A child agent cannot silently create a second main Pet by invoking the helper with its own context. If identity is unavailable or ambiguous, request the exact conversation link instead of guessing.
+`CODEX_THREAD_ID` binding has been exercised in the current root conversation. The bridge rejects child-session registration and has synthetic isolation/restoration checks; two simultaneous real root conversations and wider restored-session coverage remain acceptance work. If identity is unavailable, the helper requires `--conversation <exact-uuid>` instead of guessing.
 
-The first transport candidate is local IPC between the helper and one running app process. Verify that it works from Codex's actual permission environment. A scoped, atomic control file in a registered workspace is a fallback candidate if IPC is unavailable; it must still validate conversation identity and be acknowledged by the app. Do not broaden permissions to hide a failed transport test.
+The implemented transport uses atomic control files and acknowledgements under the checkout's ignored `.pm-pet/runtime/` directory. One app owns the local bridge. Native rendering is acknowledged separately from accepting a bridge request. Launch permission may be required by macOS/Codex; the integration does not change sandbox configuration.
 
-Proposed helper contract:
+Implemented source-helper contract:
 
 | Action | Scope |
 | --- | --- |
 | `enable` / `disable` / `status` | Current validated conversation when invoked through Codex |
-| `enable --conversation <id>` | Explicit binding outside a conversation, with provider/host context |
+| `enable --conversation <id>` | Explicit local Codex binding outside a conversation |
 | `disable --all` | All Pet bindings, only when explicitly requested |
-| `report` | Structured roadmap and decision updates for one binding and plan version |
+| `report --file <path>` | Structured roadmap and decision updates with current binding generation and increasing sequence |
 | `quit` | The app process and all its listeners |
 
-Outside Codex, commands without a resolvable conversation must ask for one or list choices. They must not silently become global commands. The helper should succeed idempotently on already-enabled/disabled bindings and return actionable errors for missing installation, identity, or connection.
+Outside Codex, scoped commands without an identity return an actionable error; they never silently become global commands. Explicit `status --all` and `disable --all` are available. Non-launching commands do not restart a stopped app.
 
 ## Native architecture
 
-Use one Swift/AppKit application with a menu bar controller and one floating window per enabled conversation. Reuse the current character and interaction work inside bundled WKWebView content. Window drawing and web content load only local resources; a narrow native bridge passes state and known UI actions.
+The implemented shell is one Swift/AppKit application with a menu bar controller and separate compact owl/progress surfaces for each enabled conversation. It reuses the character work inside bundled WKWebView content. Web content loads local resources; a narrow native bridge passes state and known UI actions.
+
+The following are logical responsibilities for the architecture. Registry, conversation state, cached quota, and local control currently live together in the Python bridge; the live quota scheduler remains future work.
 
 | Component | Responsibility |
 | --- | --- |
@@ -100,6 +116,8 @@ Quota red/orange/green and the decision lantern's yellow remain semantic colors,
 
 Quota is account-wide, not consumption attributed to one Pet. All Pets on the same validated authentication context display the same underlying snapshot and may hide it independently. Do not divide the remaining allowance between conversations.
 
+Today, the shared view is a recorded general `codex` snapshot from bound conversations, labeled with its source and real observation age. Model-specific buckets do not replace it. An optional direct CLI quota probe is implemented, but its account is not verified against Desktop, so it is not connected to automatic Pet refresh. The policies below are the next live-adapter target, not current API polling guarantees.
+
 On initial setup, only the first-ever new binding has quota visible. Subsequent new bindings start with it hidden. Save each binding's preference, including across disable/re-enable; never move the display to another Pet when one is hidden or disabled. A menu entry and per-Pet settings always offer a quota toggle, so users can restore it even when none is visible. Enabling several displays adds views of one snapshot, not quota readers.
 
 App Server exposes `account/rateLimits/read` and `account/rateLimits/updated`. These are account endpoints, not conversation endpoints. Identify windows by `windowDurationMins` and quota buckets by the supplied limit ID; `primary` is not a guaranteed 5-hour window. [App Server rate limits](https://learn.chatgpt.com/docs/app-server#6-rate-limits-chatgpt)
@@ -127,15 +145,19 @@ The identity returned by a quota connection must be checked against the intended
 
 ### 1. Validate conversation control and data sources
 
+Current: the owning root conversation, native acknowledgement, and app lifecycle have been checked on this Mac. The local observation path is connected; direct CLI quota is diagnostic only. Complete the remaining multi-conversation and compatibility checks below.
+
 - In two root conversations, obtain distinct validated identities even when the workspace is identical.
 - Confirm enable/disable reaches the app through the real Codex permission environment and can be retried without duplicates.
 - Test restoration and child-agent context so neither creates the wrong main Pet.
 - Verify a quota read path and its account context; label a transcript-only fallback accurately.
 - Verify deep-link return to each conversation and integration discovery in the existing chat.
 
-Deliverable: a small technical spike and recorded capability results, without claiming whole-build execution control.
+Deliverable: recorded capability results for the developer integration, without claiming whole-build execution control.
 
 ### 2. Build the native multi-Pet shell
+
+Current: the native shell, capacity enforcement, per-Pet preferences, and menu controls are implemented. Full-Pet hiding, unread indicators, and broader real multi-window acceptance remain.
 
 - One app process, up to five independently colored/positioned windows, and a menu listing the enabled conversations and capacity.
 - Per-conversation enable/disable, panel hiding, full-Pet hiding, scale, and persistence.
@@ -147,6 +169,8 @@ Deliverable: a small technical spike and recorded capability results, without cl
 Deliverable: a locally launchable application with explicit disconnected states where an adapter is unavailable.
 
 ### 3. Connect progress, input, and shared quota
+
+Current: explicit roadmap/question reports, observed root/child activity, stale-report rejection, and cached shared quota are connected. Automatic live account refresh and broader cross-conversation acceptance remain.
 
 - Replace demo controls/data with owner-validated snapshots and a single account scheduler.
 - A step completion updates only its Pet; plan changes invalidate affected items and do not invent progress.
@@ -160,12 +184,16 @@ Deliverable: real multi-conversation observation, five-Pet capacity checks, and 
 
 ### 4. Package the private alpha and lifecycle tests
 
+Current: local launch/disable/quit/restart are tested on the development Mac. The skill remains uninstalled, and consumer packaging, authenticated downloads, upgrade, and uninstall are not implemented.
+
 - Package the app/helper and optional conversation integration with clear installation ownership.
 - Test authenticated private installation, upgrade, disable/enable, quit/restart, disconnect, and uninstall.
 - Test window restore after display changes, unavailable data, and stale/late events.
 - Only after passing these checks, create a new `0.1.0-alpha.N` version and an explicitly published private prerelease. The prototype tag stays unchanged.
 
 ### 5. Verify execution control
+
+Current: the adapter explicitly exposes no enforced pause/resume capability. The reporting skill instructs the main agent to coordinate real child states through available runtime tools, but Pet itself cannot certify that all work has stopped.
 
 - Add one child agent to conversation A and keep an independent build running in B.
 - Confirm an A decision pauses all of A's actual build tree while leaving B running.
