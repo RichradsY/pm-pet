@@ -1,0 +1,105 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="320" viewBox="0 0 1280 320" role="img" aria-labelledby="title description">
+  <title id="title">PM Pet — an illustrative co-build workflow</title>
+  <desc id="description">Four steps: build in Codex, see real progress, make the call, and review and continue. Each decision returns to its own Codex conversation. This diagram is illustrative.</desc>
+  <style>
+  :root { color-scheme: light dark; --paper:#f5f7f1; --ink:#293e34; --muted:#68776c;
+    --line:#dbe3d9; --panel:#ffffff; --panel-line:#d5dfd4; --field:#e9eee3;
+    --green:#527d64; --green-soft:#dfe9de; --gold:#bf8533; --gold-soft:#fff0cd;
+    --button:#eaf0e5; --shadow:#60765e; --cream:#fff0d5; --eye:#3d302b;
+    --eye-white:#fffdf8; --cheek:#e9ad9b; --beak:#eea949; --book:#fff7e7;
+    --book-line:#637b66; --chick:#ffe196; --chick-wing:#dfb663;
+    --sage:#80a88f; --sage-wing:#627e6c; --sky:#83a4bd; --sky-wing:#6b8193; }
+  @media (prefers-color-scheme: dark) {
+    :root { --paper:#17251f; --ink:#e3ecdf; --muted:#a8b9ac; --line:#35493c;
+      --panel:#23382b; --panel-line:#425746; --field:#203426; --green:#a6cfa7;
+      --green-soft:#344c39; --gold:#f1c267; --gold-soft:#463c23; --button:#354d38;
+      --shadow:#07170d; --cream:#f0daba; --eye:#33261f; --eye-white:#fff5e4;
+      --cheek:#dca395; --beak:#e5a34f; --book:#f0e3ca; --book-line:#617d68;
+      --chick:#efd089; --chick-wing:#d6ac60; --sage:#86ad95; --sage-wing:#6b8975;
+      --sky:#8faec5; --sky-wing:#708a9c; }
+  }
+  text { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; fill:var(--ink); }
+  .display { font-family:Georgia,'Times New Roman',serif; font-weight:400; letter-spacing:-2.4px; }
+  .muted { fill:var(--muted); }
+  .label { font-size:15px; font-weight:650; letter-spacing:1.8px; }
+  .body { font-size:22px; }
+  .small { font-size:17px; }
+  .panel { fill:var(--panel); stroke:var(--panel-line); stroke-width:1.5; }
+  .line { stroke:var(--line); fill:none; }
+  .sage { --fur:var(--sage); --wing:var(--sage-wing); }
+  .sky { --fur:var(--sky); --wing:var(--sky-wing); }
+</style>
+  <rect width="1280" height="320" rx="28" fill="var(--paper)"/>
+
+  <text x="47" y="57" class="display" style="font-size:35px;letter-spacing:-.6px">A small loop for better decisions.</text>
+  <text x="1232" y="53" text-anchor="end" class="label muted" style="font-size:11px;letter-spacing:1.1px">ILLUSTRATIVE WORKFLOW</text>
+  <g stroke="var(--line)" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M269 142H316M307 136L316 142L307 148"/>
+    <path d="M573 142H620M611 136L620 142L611 148"/>
+    <path d="M877 142H924M915 136L924 142L915 148"/>
+  </g>
+  <g transform="translate(49 107)">
+    <rect width="57" height="43" rx="9" fill="var(--green-soft)"/>
+    <path d="M12 13L21 21L12 29M28 30H42" fill="none" stroke="var(--green)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="48" y="187" style="font-size:23px;font-weight:600">Build in Codex</text>
+  <text x="48" y="219" class="small muted">Codex builds in your</text>
+  <text x="48" y="243" class="small muted">conversation.</text>
+<g transform="translate(359 130)">
+    <path d="M0 0H80" stroke="var(--line)" stroke-width="3"/>
+    <path d="M0 0H20" stroke="var(--green)" stroke-width="3"/>
+    <g fill="var(--green)"><circle r="4.8"/><circle cx="20" r="4.8"/></g>
+    <circle cx="40" r="4.8" fill="var(--panel)" stroke="var(--green)" stroke-width="3"/>
+    <g fill="var(--line)"><circle cx="60" r="4.8"/><circle cx="80" r="4.8"/></g>
+  </g>
+  <text x="352" y="187" style="font-size:23px;font-weight:600">See real progress</text>
+  <text x="352" y="219" class="small muted">Pet shows reported</text>
+  <text x="352" y="243" class="small muted">roadmap updates.</text>
+<g transform="translate(650 86) scale(0.8)" class="sky">
+    <ellipse cx="47" cy="98" rx="29" ry="3.3" fill="var(--shadow)" opacity=".12"/>
+    <g transform="translate(8 16)">
+      <path d="M6 18Q-2 3 4-8Q14-6 24 6M52 6Q62-6 72-8Q78 3 70 18" fill="var(--fur)"/>
+      <path d="M0 31C0 8 16 0 38 0S76 8 76 31V45C76 68 61 80 38 80S0 68 0 45Z" fill="var(--fur)"/>
+      <path d="M64 15Q73 26 73 43C73 65 59 75 38 77Q60 83 71 64Q80 49 76 31Q75 21 64 15Z" fill="var(--wing)" opacity=".5"/>
+      <ellipse cx="38" cy="60" rx="22" ry="15" fill="var(--cream)" opacity=".75"/>
+      <ellipse cx="21.5" cy="30" rx="18.5" ry="21" transform="rotate(-8 21.5 30)" fill="var(--cream)"/>
+      <ellipse cx="54.5" cy="30" rx="18.5" ry="21" transform="rotate(8 54.5 30)" fill="var(--cream)"/>
+      <g fill="var(--eye)">
+        <ellipse cx="22" cy="30" rx="9.2" ry="10.6"/>
+        <ellipse cx="54" cy="30" rx="9.2" ry="10.6"/>
+      </g>
+      <g fill="var(--eye-white)">
+        <ellipse cx="25" cy="26" rx="3.3" ry="3.9"/>
+        <ellipse cx="57" cy="26" rx="3.3" ry="3.9"/>
+        <circle cx="18.5" cy="34.5" r="1.4"/>
+        <circle cx="50.5" cy="34.5" r="1.4"/>
+      </g>
+      <g fill="var(--cheek)" opacity=".65"><ellipse cx="12" cy="43" rx="5" ry="2.7"/><ellipse cx="64" cy="43" rx="5" ry="2.7"/></g>
+      <path d="M33 40Q38 35 43 40L38 48Z" fill="var(--beak)"/>
+      <path d="M14 17Q20 12 25 16M49 16Q55 12 61 17" stroke="var(--eye)" stroke-width="2" fill="none" opacity=".65" stroke-linecap="round"/>
+      <g fill="var(--beak)"><ellipse cx="22" cy="79" rx="8" ry="3.5"/><ellipse cx="54" cy="79" rx="8" ry="3.5"/></g>
+      <g stroke-linejoin="round">
+        <ellipse cx="72" cy="35" rx="17" ry="22" fill="var(--beak)" opacity=".10"/>
+        <rect x="68" y="14" width="8" height="12" rx="4" fill="none" stroke="var(--beak)" stroke-width="2.2"/>
+        <rect x="64" y="25" width="16" height="22" rx="5" fill="#ffe5a4" stroke="#be893f" stroke-width="1.6"/>
+        <path d="M65 25H79M64 48H80" stroke="#bc843a" stroke-width="4" stroke-linecap="round"/>
+        <path d="M72 30V40M72 44V44.2" stroke="#a87629" stroke-width="2.1" stroke-linecap="round"/>
+      </g>
+      <path d="M4 39C-5 37-7 52-1 65Q6 72 10 56Z" fill="var(--wing)"/>
+      <path d="M67 52C69 45 74 44 78 48Q81 53 76 57L69 62Z" fill="var(--wing)"/>
+    </g>
+  </g>
+  <text x="656" y="187" style="font-size:23px;font-weight:600">Make the call</text>
+  <text x="656" y="219" class="small muted">You answer key</text>
+  <text x="656" y="243" class="small muted">product questions.</text>
+  <g transform="translate(986 130)" fill="none" stroke="var(--green)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M-18-5A20 20 0 1 1-1 20M-19-16V-4H-7"/>
+    <path d="M-8 0L-2 6L10-7"/>
+  </g>
+  <text x="960" y="187" style="font-size:23px;font-weight:600">Review &amp; continue</text>
+  <text x="960" y="219" class="small muted">Codex reviews the answer</text>
+  <text x="960" y="243" class="small muted">and continues.</text>
+  <path d="M48 269H1232" class="line"/>
+  <text x="48" y="295" class="small muted" style="font-size:15px">Every decision returns to its own Codex conversation.</text>
+
+</svg>

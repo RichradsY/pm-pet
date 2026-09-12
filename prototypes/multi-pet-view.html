@@ -1,0 +1,98 @@
+<meta charset="utf-8">
+<div id="pm-pet-multi" aria-label="Five conversation Pets — interaction preview">
+<style>
+/* ORIGINAL_OWL_STYLES */
+#pm-pet-multi{color-scheme:light dark;--mp-sage:light-dark(#80a88f,#86ad95);--mp-sky:light-dark(#83a4bd,#8faec5);--mp-lilac:light-dark(#aa92b7,#b49fc0);--mp-rose:light-dark(#c38e8c,#c99b99);--mp-sand:light-dark(#b89a72,#c7a981)}
+#pm-pet-multi [hidden]{display:none!important}
+#pm-pet-multi .mp-app{background:var(--pp-bg1);border:1px solid var(--pp-line);border-radius:16px;overflow:clip}
+#pm-pet-multi .mp-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 18px;background:var(--pp-paper);border-bottom:1px solid var(--pp-line)}
+#pm-pet-multi .mp-brand{font-weight:500;white-space:nowrap}
+#pm-pet-multi .mp-manager{min-width:0;flex:1;text-align:right}
+#pm-pet-multi .mp-manager summary{cursor:pointer;list-style:none;font-size:12px;color:var(--pp-muted)}
+#pm-pet-multi .mp-manager summary::-webkit-details-marker{display:none}
+#pm-pet-multi .mp-manager-body{padding:16px 18px;background:var(--pp-paper);border-bottom:1px solid var(--pp-line)}
+#pm-pet-multi .mp-manager-note{margin:0 0 12px;color:var(--pp-muted);font-size:12px}
+#pm-pet-multi .mp-roster{display:grid;gap:0}
+#pm-pet-multi .mp-roster-row{display:grid;grid-template-columns:minmax(110px,1fr) auto auto;align-items:center;gap:16px;padding:9px 0;border-top:1px solid var(--pp-line)}
+#pm-pet-multi .mp-roster-name{display:flex;align-items:center;gap:9px;min-width:0}
+#pm-pet-multi .mp-swatch{width:10px;height:10px;flex:none;border-radius:50%;background:var(--mp-accent)}
+#pm-pet-multi .mp-roster-title{font-size:13px;overflow-wrap:anywhere}
+#pm-pet-multi .mp-switch{display:flex;align-items:center;gap:5px;font-size:12px;white-space:nowrap}
+#pm-pet-multi input[type=checkbox]{accent-color:var(--pp-green);width:16px;height:16px;margin:0}
+#pm-pet-multi .mp-button{background:var(--pp-paper);border:1px solid var(--pp-line);border-radius:7px;padding:6px 10px;font:inherit;font-size:12px;color:var(--pp-ink)}
+#pm-pet-multi .mp-button:disabled{opacity:.5;cursor:default}
+#pm-pet-multi .mp-quiet{background:transparent;border:0;color:var(--pp-muted);font:inherit;font-size:12px;padding:4px}
+#pm-pet-multi .mp-manager-footer{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px}
+#pm-pet-multi .mp-scene{position:relative;isolation:isolate;min-height:440px;background:linear-gradient(160deg,var(--pp-bg1),var(--pp-bg2))}
+#pm-pet-multi .mp-scene-caption{position:absolute;top:16px;left:18px;right:18px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;color:var(--pp-muted);font-size:12px;pointer-events:none}
+#pm-pet-multi .mp-pet-unit{position:absolute;width:92px;height:104px;--pp-fur:var(--mp-accent);--pp-wing:color-mix(in srgb,var(--mp-accent) 70%,#403d35);--pp-chick:color-mix(in srgb,var(--mp-accent) 25%,var(--pp-cream));--pp-chick-wing:color-mix(in srgb,var(--mp-accent) 75%,var(--pp-cream))}
+#pm-pet-multi [data-theme=sage]{--mp-accent:var(--mp-sage)}
+#pm-pet-multi [data-theme=sky]{--mp-accent:var(--mp-sky)}
+#pm-pet-multi [data-theme=lilac]{--mp-accent:var(--mp-lilac)}
+#pm-pet-multi [data-theme=rose]{--mp-accent:var(--mp-rose)}
+#pm-pet-multi [data-theme=sand]{--mp-accent:var(--mp-sand)}
+#pm-pet-multi .mp-pet-unit .pp-pet{left:0;top:0}
+#pm-pet-multi .mp-name{position:absolute;left:46px;transform:translateX(-50%);display:flex;align-items:center;justify-content:center;gap:5px;width:max-content;max-width:155px;padding:3px 6px;border:0;background:transparent;font-size:12px;line-height:1.35;text-align:center}
+#pm-pet-multi .mp-name-text{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+#pm-pet-multi .mp-letter{font-size:11px;font-weight:500;background:var(--pp-paper);color:var(--pp-ink);border-radius:4px;padding:1px 4px;flex:none}
+#pm-pet-multi .mp-dot{position:absolute;right:4px;top:18px;width:7px;height:7px;border-radius:50%;background:var(--pp-green);box-shadow:0 0 0 2px var(--pp-bg1);pointer-events:none}
+#pm-pet-multi .mp-signal{position:absolute;left:46px;transform:translateX(-50%);top:-16px;white-space:nowrap;font-size:11px;background:var(--pp-warm);border:1px solid var(--pp-line);border-radius:16px;padding:2px 8px;cursor:pointer}
+#pm-pet-multi .mp-quota{position:absolute;left:46px;transform:translateX(-50%);width:max-content;max-width:174px;text-align:center}
+#pm-pet-multi .mp-quota .pp-usage-row{gap:4px}
+#pm-pet-multi .mp-quota-caption{display:block;font-size:11px;color:var(--pp-muted);margin-top:4px}
+#pm-pet-multi .mp-panel{z-index:20;width:302px;max-width:calc(100% - 24px);animation:none!important}
+#pm-pet-multi .mp-panel .pp-title{margin:9px 0;font-size:15px}
+#pm-pet-multi .mp-panel .pp-header{gap:8px}
+#pm-pet-multi .mp-panel .pp-header>span{display:flex;align-items:center;gap:6px;min-width:0}
+#pm-pet-multi .mp-panel .pp-question p{overflow-wrap:anywhere}
+#pm-pet-multi .mp-panel-footer{display:flex;justify-content:space-between;gap:8px;margin-top:10px}
+#pm-pet-multi .mp-panel .pp-settings{margin-top:10px}
+#pm-pet-multi .mp-status{font-size:11px;color:var(--pp-muted)}
+#pm-pet-multi .mp-preview{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:var(--pp-muted)}
+#pm-pet-multi .mp-preview select{font:inherit;max-width:100%;background:var(--pp-paper);color:var(--pp-ink);border:1px solid var(--pp-line);border-radius:7px;padding:6px 8px}
+#pm-pet-multi .mp-feedback{font-size:12px;margin-top:8px;color:var(--pp-muted);min-height:18px;overflow-wrap:anywhere}
+#pm-pet-multi .mp-error{color:var(--pp-low);font-size:12px;margin:10px 0 0}
+#pm-pet-multi .mp-empty{position:absolute;top:40%;left:18px;right:18px;text-align:center;color:var(--pp-muted);font-size:13px}
+#pm-pet-multi .mp-scale{display:flex;align-items:center;gap:10px;margin-top:10px;font-size:12px}
+#pm-pet-multi .mp-scale input{min-width:0;width:100%;accent-color:var(--pp-green)}
+#pm-pet-multi .mp-scale output{min-width:36px}
+#pm-pet-multi .pp-pet.pp-waiting .pp-baby,#pm-pet-multi .pp-pet.pp-waiting .pp-baby *{animation-play-state:paused!important}
+@media(max-width:480px){#pm-pet-multi .mp-bar{padding:12px}#pm-pet-multi .mp-manager-body{padding:12px}#pm-pet-multi .mp-roster-row{gap:8px;grid-template-columns:minmax(90px,1fr) auto auto}#pm-pet-multi .mp-button{padding:6px}#pm-pet-multi .mp-roster-title{font-size:12px}}
+@media(pointer:coarse){#pm-pet-multi .mp-button,#pm-pet-multi .mp-quiet,#pm-pet-multi .mp-switch,#pm-pet-multi .mp-name{min-height:44px}#pm-pet-multi .mp-panel .pp-close{min-height:44px;min-width:44px}}
+</style>
+<div class="mp-app">
+  <div class="mp-bar"><span class="mp-brand">PM Pet</span><details class="mp-manager"><summary><span data-i18n="manage">Manage pets</span> · <span class="mp-capacity">5 / 5</span> ▾</summary></details></div>
+  <div class="mp-manager-body" hidden>
+    <p class="mp-manager-note" data-i18n="managerNote">Up to 5 conversation pets. Account usage is shared.</p>
+    <div class="mp-roster"></div>
+    <div class="mp-manager-footer"><button class="mp-button mp-arrange" type="button" data-i18n="arrange">Arrange pets</button><span class="mp-schedule"></span></div>
+    <p class="mp-error" role="alert" hidden></p>
+  </div>
+  <div class="mp-scene">
+    <div class="mp-scene-caption"><span data-i18n="desktop">Your desktop</span><span data-i18n="example">Design preview · Sample conversations & usage</span></div>
+    <div class="mp-empty" hidden data-i18n="empty">No pets enabled. Open Manage pets to bring one back.</div>
+    <section class="pp-panel mp-panel" id="mp-panel" aria-label="Conversation progress" hidden>
+      <div class="pp-header"><span><i class="mp-swatch" aria-hidden="true"></i><span class="mp-panel-name"></span></span><button class="pp-close" type="button" aria-label="Hide progress">×</button></div>
+      <div class="mp-status"></div><div class="pp-title"></div>
+      <div class="pp-progress-meta"><span class="mp-count"></span><span class="mp-percent"></span></div>
+      <div class="pp-progress-track" role="progressbar" aria-label="Roadmap completion" aria-valuemin="0" aria-valuemax="100"><span class="pp-progress-fill"></span></div>
+      <details class="pp-road"><summary data-i18n="roadmap">View roadmap</summary><ol></ol></details>
+      <div class="pp-question" hidden><span class="pp-question-label" data-i18n="decision">Your decision</span><p></p><button class="pp-return" type="button" data-i18n="answer">Answer in Codex ↗</button></div>
+      <details class="pp-settings"><summary data-i18n="settings">Pet settings</summary>
+        <label class="pp-usage-setting"><input class="mp-quota-toggle" type="checkbox"><span data-i18n="showUsage">Show account usage here</span></label>
+        <label class="mp-scale"><span data-i18n="size">Size</span><input type="range" class="mp-size" min="75" max="150" step="5" value="100" aria-label="Pet size"><output>100%</output></label>
+        <div class="mp-panel-footer"><button class="mp-quiet mp-open-chat" type="button" data-i18n="open">Open in Codex ↗</button><button class="mp-quiet mp-disable" type="button" data-i18n="disable">Disable pet</button></div>
+      </details>
+    </section>
+  </div>
+</div>
+<div class="mp-preview" aria-label="Demo controls"><label><span data-i18n="try">Try</span> <select class="mp-demo-select" aria-label="Demo conversation"></select></label><button type="button" class="mp-button mp-advance" data-i18n="advance">Advance step</button><button type="button" class="mp-button mp-ask" data-i18n="needs">Needs you</button><button type="button" class="mp-button mp-resolve" data-i18n="received" hidden>Answer received</button><button type="button" class="mp-button mp-chicks" data-i18n="chicks">Subagents</button></div>
+<div class="mp-feedback" role="status" aria-live="polite">Drag an owl · Click for progress · Double-click to return</div>
+<template class="mp-owl-template"><!-- OWL_TEMPLATE --></template>
+<script>
+/* MODEL_SOURCE */
+</script>
+<script>
+/* VIEW_SOURCE */
+</script>
+</div>

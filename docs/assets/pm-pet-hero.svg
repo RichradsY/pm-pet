@@ -1,0 +1,165 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" role="img" aria-labelledby="title description">
+  <title id="title">PM Pet — stay close to what matters</title>
+  <desc id="description">Illustrative sample UI, not real user data. A sage owl reads beside a roadmap showing two of five steps, with a small helper chick and sample weekly quota of 72 percent. A blue owl holds a yellow lantern for a product decision that opens in Codex. PM Pet is a macOS companion for co-building with Codex.</desc>
+  <style>
+  :root { color-scheme: light dark; --paper:#f5f7f1; --ink:#293e34; --muted:#68776c;
+    --line:#dbe3d9; --panel:#ffffff; --panel-line:#d5dfd4; --field:#e9eee3;
+    --green:#527d64; --green-soft:#dfe9de; --gold:#bf8533; --gold-soft:#fff0cd;
+    --button:#eaf0e5; --shadow:#60765e; --cream:#fff0d5; --eye:#3d302b;
+    --eye-white:#fffdf8; --cheek:#e9ad9b; --beak:#eea949; --book:#fff7e7;
+    --book-line:#637b66; --chick:#ffe196; --chick-wing:#dfb663;
+    --sage:#80a88f; --sage-wing:#627e6c; --sky:#83a4bd; --sky-wing:#6b8193; }
+  @media (prefers-color-scheme: dark) {
+    :root { --paper:#17251f; --ink:#e3ecdf; --muted:#a8b9ac; --line:#35493c;
+      --panel:#23382b; --panel-line:#425746; --field:#203426; --green:#a6cfa7;
+      --green-soft:#344c39; --gold:#f1c267; --gold-soft:#463c23; --button:#354d38;
+      --shadow:#07170d; --cream:#f0daba; --eye:#33261f; --eye-white:#fff5e4;
+      --cheek:#dca395; --beak:#e5a34f; --book:#f0e3ca; --book-line:#617d68;
+      --chick:#efd089; --chick-wing:#d6ac60; --sage:#86ad95; --sage-wing:#6b8975;
+      --sky:#8faec5; --sky-wing:#708a9c; }
+  }
+  text { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; fill:var(--ink); }
+  .display { font-family:Georgia,'Times New Roman',serif; font-weight:400; letter-spacing:-2.4px; }
+  .muted { fill:var(--muted); }
+  .label { font-size:15px; font-weight:650; letter-spacing:1.8px; }
+  .body { font-size:22px; }
+  .small { font-size:17px; }
+  .panel { fill:var(--panel); stroke:var(--panel-line); stroke-width:1.5; }
+  .line { stroke:var(--line); fill:none; }
+  .sage { --fur:var(--sage); --wing:var(--sage-wing); }
+  .sky { --fur:var(--sky); --wing:var(--sky-wing); }
+</style>
+  <rect width="1280" height="720" rx="28" fill="var(--paper)"/>
+
+  <path d="M757 96C1034 39 1253 164 1262 383S1129 674 947 664C744 653 620 540 622 349S633 121 757 96Z" fill="var(--field)"/>
+  <text x="64" y="76" class="label" style="font-size:18px;letter-spacing:3px">PM PET</text>
+  <rect x="960" y="45" width="266" height="35" rx="17.5" fill="var(--green-soft)"/>
+  <text x="1093" y="67" text-anchor="middle" class="label" style="font-size:12px;letter-spacing:1.4px">ILLUSTRATIVE · SAMPLE UI</text>
+  <text x="62" y="211" class="display" style="font-size:67px">Stay close to</text>
+  <text x="62" y="280" class="display" style="font-size:67px">what matters.</text>
+  <text x="65" y="340" class="body muted">A small companion for</text>
+  <text x="65" y="372" class="body muted">co-building with Codex.</text>
+  <g transform="translate(65 449)" stroke="var(--green)" stroke-width="2" fill="none" stroke-linecap="round">
+    <path d="M0 0H17"/><circle cx="1" r="3" fill="var(--green)"/><circle cx="9" r="3" fill="var(--paper)"/><circle cx="17" r="3" fill="var(--paper)"/>
+  </g>
+  <text x="99" y="457" class="body">Progress, without hovering.</text>
+  <g transform="translate(64 495)" stroke="var(--gold)" stroke-width="2" fill="none" stroke-linecap="round"><path d="M7 3V-1Q11-6 15-1V3M4 5H18V19H4ZM4 20H18M11 9V13M11 16V16.1"/></g>
+  <text x="99" y="511" class="body">Your judgment, at the right moment.</text>
+  <g transform="translate(65 551)" stroke="var(--green)" stroke-width="2" fill="none" stroke-linecap="round"><rect x="0" y="0" width="20" height="13" rx="5"/><path d="M4 6.5H13" stroke-width="4"/></g>
+  <text x="99" y="565" class="body">Usage, one glance away.</text>
+  <path d="M65 610H505" class="line"/>
+  <text x="65" y="646" class="small muted">macOS · One Pet per conversation</text>
+  <text x="65" y="675" class="small muted">Up to 5 little companions.</text>
+
+  <rect x="638" y="137" width="329" height="179" rx="19" fill="var(--shadow)" opacity=".045" transform="translate(0 7)"/>
+  <rect x="638" y="137" width="329" height="179" rx="19" class="panel"/>
+  <text x="662" y="170" class="label muted" style="font-size:12px">ROADMAP</text>
+  <text x="941" y="170" text-anchor="end" class="small muted">2 of 5</text>
+  <text x="662" y="204" style="font-size:23px;font-weight:600">Build a signup flow</text>
+<g transform="translate(671 240)">
+    <path d="M0 0H160" stroke="var(--line)" stroke-width="3"/>
+    <path d="M0 0H40" stroke="var(--green)" stroke-width="3"/>
+    <g fill="var(--green)"><circle r="6"/><circle cx="40" r="6"/></g>
+    <circle cx="80" r="6" fill="var(--panel)" stroke="var(--green)" stroke-width="3"/>
+    <g fill="var(--line)"><circle cx="120" r="6"/><circle cx="160" r="6"/></g>
+  </g>
+  <text x="941" y="247" text-anchor="end" style="font-size:22px;font-weight:600;fill:var(--green)">40%</text>
+  <text x="662" y="285" class="small muted">Next · Confirm the form fields</text>
+  <path d="M793 317L804 328L815 317" fill="var(--panel)" stroke="var(--panel-line)" stroke-width="1.3"/>
+
+  <rect x="986" y="279" width="240" height="137" rx="17" class="panel"/>
+  <circle cx="1008" cy="304" r="4" fill="var(--gold)"/>
+  <text x="1021" y="309" class="label" style="font-size:11px;fill:var(--gold)">YOUR DECISION</text>
+  <text x="1004" y="341" style="font-size:19px;font-weight:600">Public or invite-only?</text>
+  <rect x="1003" y="360" width="205" height="37" rx="10" fill="var(--button)"/>
+  <text x="1105" y="384" text-anchor="middle" class="small" style="font-weight:600">Open Codex ↗</text>
+  <path d="M1090 417L1100 427L1110 417" fill="var(--panel)" stroke="var(--panel-line)" stroke-width="1.3"/>
+<g transform="translate(694 343) scale(2.23)" class="sage">
+    <ellipse cx="47" cy="98" rx="29" ry="3.3" fill="var(--shadow)" opacity=".12"/>
+    <g transform="translate(8 16)">
+      <path d="M6 18Q-2 3 4-8Q14-6 24 6M52 6Q62-6 72-8Q78 3 70 18" fill="var(--fur)"/>
+      <path d="M0 31C0 8 16 0 38 0S76 8 76 31V45C76 68 61 80 38 80S0 68 0 45Z" fill="var(--fur)"/>
+      <path d="M64 15Q73 26 73 43C73 65 59 75 38 77Q60 83 71 64Q80 49 76 31Q75 21 64 15Z" fill="var(--wing)" opacity=".5"/>
+      <ellipse cx="38" cy="60" rx="22" ry="15" fill="var(--cream)" opacity=".75"/>
+      <ellipse cx="21.5" cy="30" rx="18.5" ry="21" transform="rotate(-8 21.5 30)" fill="var(--cream)"/>
+      <ellipse cx="54.5" cy="30" rx="18.5" ry="21" transform="rotate(8 54.5 30)" fill="var(--cream)"/>
+      <g fill="var(--eye)">
+        <ellipse cx="22" cy="33.5" rx="9.2" ry="10.6"/>
+        <ellipse cx="54" cy="33.5" rx="9.2" ry="10.6"/>
+      </g>
+      <g fill="var(--eye-white)">
+        <ellipse cx="25" cy="29.5" rx="3.3" ry="3.9"/>
+        <ellipse cx="57" cy="29.5" rx="3.3" ry="3.9"/>
+        <circle cx="18.5" cy="38.0" r="1.4"/>
+        <circle cx="50.5" cy="38.0" r="1.4"/>
+      </g>
+      <g fill="var(--cheek)" opacity=".65"><ellipse cx="12" cy="43" rx="5" ry="2.7"/><ellipse cx="64" cy="43" rx="5" ry="2.7"/></g>
+      <path d="M33 40Q38 35 43 40L38 48Z" fill="var(--beak)"/>
+
+      <g fill="var(--beak)"><ellipse cx="22" cy="79" rx="8" ry="3.5"/><ellipse cx="54" cy="79" rx="8" ry="3.5"/></g>
+      <g stroke="var(--book-line)" stroke-width="1.7" stroke-linejoin="round">
+        <path d="M7 55Q21 52 38 59V80Q24 75 8 77Z" fill="var(--book)"/>
+        <path d="M38 59Q54 52 68 55L67 77Q52 74 38 80Z" fill="var(--book)"/>
+        <path d="M14 61Q24 61 32 65M14 67Q24 66 32 70M45 64Q54 60 61 61M45 70Q54 66 61 67" fill="none" opacity=".48" stroke-width="1"/>
+        <path d="M51 57V69L54 66L57 67V55" fill="var(--beak)" stroke="none"/>
+      </g>
+      <path d="M10 57C0 54-2 65 3 77Q8 83 14 73Z" fill="var(--wing)"/>
+      <path d="M66 57C76 54 80 66 73 78Q68 82 63 73Z" fill="var(--wing)"/>
+    </g>
+  </g><g transform="translate(904 524) scale(1.46)">
+    <ellipse cx="15" cy="33" rx="12" ry="2" fill="var(--shadow)" opacity=".1"/>
+    <path d="M8 7Q6 0 11 1L15 5Q18-1 21 3L20 8" fill="var(--chick)"/>
+    <rect x="0" y="5" width="30" height="27" rx="13" fill="var(--chick)"/>
+    <path d="M3 17Q-4 16-1 26L4 28M27 17Q34 16 31 26L26 28" fill="var(--chick-wing)"/>
+    <g fill="var(--eye)"><ellipse cx="9" cy="15" rx="2.2" ry="2.8"/><ellipse cx="21" cy="15" rx="2.2" ry="2.8"/></g>
+    <g fill="var(--eye-white)"><circle cx="9.6" cy="14" r=".8"/><circle cx="21.6" cy="14" r=".8"/></g>
+    <path d="M12 21L15 18L18 21L15 24Z" fill="var(--beak)"/>
+    <path d="M5 31H11M19 31H25" stroke="var(--beak)" stroke-width="3" stroke-linecap="round"/>
+  </g><g transform="translate(1020 432) scale(1.73)" class="sky">
+    <ellipse cx="47" cy="98" rx="29" ry="3.3" fill="var(--shadow)" opacity=".12"/>
+    <g transform="translate(8 16)">
+      <path d="M6 18Q-2 3 4-8Q14-6 24 6M52 6Q62-6 72-8Q78 3 70 18" fill="var(--fur)"/>
+      <path d="M0 31C0 8 16 0 38 0S76 8 76 31V45C76 68 61 80 38 80S0 68 0 45Z" fill="var(--fur)"/>
+      <path d="M64 15Q73 26 73 43C73 65 59 75 38 77Q60 83 71 64Q80 49 76 31Q75 21 64 15Z" fill="var(--wing)" opacity=".5"/>
+      <ellipse cx="38" cy="60" rx="22" ry="15" fill="var(--cream)" opacity=".75"/>
+      <ellipse cx="21.5" cy="30" rx="18.5" ry="21" transform="rotate(-8 21.5 30)" fill="var(--cream)"/>
+      <ellipse cx="54.5" cy="30" rx="18.5" ry="21" transform="rotate(8 54.5 30)" fill="var(--cream)"/>
+      <g fill="var(--eye)">
+        <ellipse cx="22" cy="30" rx="9.2" ry="10.6"/>
+        <ellipse cx="54" cy="30" rx="9.2" ry="10.6"/>
+      </g>
+      <g fill="var(--eye-white)">
+        <ellipse cx="25" cy="26" rx="3.3" ry="3.9"/>
+        <ellipse cx="57" cy="26" rx="3.3" ry="3.9"/>
+        <circle cx="18.5" cy="34.5" r="1.4"/>
+        <circle cx="50.5" cy="34.5" r="1.4"/>
+      </g>
+      <g fill="var(--cheek)" opacity=".65"><ellipse cx="12" cy="43" rx="5" ry="2.7"/><ellipse cx="64" cy="43" rx="5" ry="2.7"/></g>
+      <path d="M33 40Q38 35 43 40L38 48Z" fill="var(--beak)"/>
+      <path d="M14 17Q20 12 25 16M49 16Q55 12 61 17" stroke="var(--eye)" stroke-width="2" fill="none" opacity=".65" stroke-linecap="round"/>
+      <g fill="var(--beak)"><ellipse cx="22" cy="79" rx="8" ry="3.5"/><ellipse cx="54" cy="79" rx="8" ry="3.5"/></g>
+      <g stroke-linejoin="round">
+        <ellipse cx="72" cy="35" rx="17" ry="22" fill="var(--beak)" opacity=".10"/>
+        <rect x="68" y="14" width="8" height="12" rx="4" fill="none" stroke="var(--beak)" stroke-width="2.2"/>
+        <rect x="64" y="25" width="16" height="22" rx="5" fill="#ffe5a4" stroke="#be893f" stroke-width="1.6"/>
+        <path d="M65 25H79M64 48H80" stroke="#bc843a" stroke-width="4" stroke-linecap="round"/>
+        <path d="M72 30V40M72 44V44.2" stroke="#a87629" stroke-width="2.1" stroke-linecap="round"/>
+      </g>
+      <path d="M4 39C-5 37-7 52-1 65Q6 72 10 56Z" fill="var(--wing)"/>
+      <path d="M67 52C69 45 74 44 78 48Q81 53 76 57L69 62Z" fill="var(--wing)"/>
+    </g>
+  </g>
+  <rect x="719" y="580" width="157" height="34" rx="17" class="panel"/>
+  <circle cx="737" cy="597" r="4" fill="var(--sage)"/>
+  <text x="748" y="603" class="small" style="font-weight:600">Workshop site</text>
+  <rect x="1028" y="616" width="164" height="34" rx="17" class="panel"/>
+  <circle cx="1046" cy="633" r="4" fill="var(--sky)"/>
+  <text x="1057" y="639" class="small" style="font-weight:600">Member portal</text>
+
+  <rect x="690" y="627" width="217" height="38" rx="19" class="panel"/>
+  <text x="707" y="652" class="small muted">Weekly left</text>
+  <rect x="804" y="641" width="40" height="10" rx="5" fill="var(--green-soft)"/>
+  <rect x="804" y="641" width="29" height="10" rx="5" fill="var(--green)"/>
+  <text x="891" y="652" text-anchor="end" class="small" style="fill:var(--green);font-weight:650">72%</text>
+
+</svg>

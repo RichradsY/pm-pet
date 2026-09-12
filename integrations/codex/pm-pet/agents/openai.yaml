@@ -1,0 +1,3 @@
+interface:
+  display_name: "PM Pet"
+  short_description: "Connect a conversation pet and report build progress"

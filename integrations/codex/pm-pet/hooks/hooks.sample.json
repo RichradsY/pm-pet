@@ -1,0 +1,18 @@
+{
+  "description": "Illustrative only: replace absolute paths using render_config.py before reviewing in Codex.",
+  "hooks": {
+    "PreToolUse": [{"matcher": ".*", "hooks": [{
+      "type": "command",
+      "command": "/usr/bin/python3 '/absolute/path/PM Pet/integrations/codex/pm-pet/hooks/pm_pet_gate.py' --home '/absolute/path/PM Pet' --runtime '/absolute/path/PM Pet/.pm-pet/runtime'",
+      "timeout": 5,
+      "statusMessage": "Checking PM Pet feedback gate"
+    }]}],
+    "UserPromptSubmit": [{"hooks": [{
+      "type": "command",
+      "command": "/usr/bin/python3 '/absolute/path/PM Pet/integrations/codex/pm-pet/hooks/pm_pet_gate.py' --home '/absolute/path/PM Pet' --runtime '/absolute/path/PM Pet/.pm-pet/runtime'",
+      "timeout": 5,
+      "additionalContextLimit": 500,
+      "statusMessage": "Checking PM Pet feedback gate"
+    }]}]
+  }
+}

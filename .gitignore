@@ -21,8 +21,12 @@ xcuserdata/
 *.mobileprovision
 *.provisionprofile
 .pm-pet/
+# Generated machine-specific hook paths and Codex trust stay local.
+/.codex/hooks.json
 local-state/
 diagnostics/
+/output/playwright/
+/.playwright-cli/
 
 # Original workspace research and machine-specific notes remain local.
 # Repository-facing product and distribution documents live in docs/.

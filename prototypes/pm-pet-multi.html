@@ -1,0 +1,819 @@
+<meta charset="utf-8">
+<div id="pm-pet-multi" aria-label="Five conversation Pets — interaction preview">
+<style>
+
+#pm-pet-multi{--pp-paper:light-dark(#fff,#292d2e);--pp-ink:light-dark(#283330,#edf1ee);--pp-muted:light-dark(#66736d,#bac3bd);--pp-line:light-dark(#dce5de,#4a5750);--pp-green:light-dark(#42755c,#9cc9a9);--pp-warm:light-dark(#fff3d9,#4e432f);--pp-fur:light-dark(#ad7c58,#bc906c);--pp-wing:light-dark(#8a5e43,#936c4e);--pp-cream:light-dark(#fff0d5,#f0daba);--pp-face:light-dark(#3d302b,#33261f);--pp-eye-white:light-dark(#fffdf8,#fff5e4);--pp-gold:light-dark(#eea949,#e5a34f);--pp-pink:light-dark(#e9ad9b,#dca395);--pp-chick:light-dark(#ffe196,#efd089);--pp-chick-wing:light-dark(#efc66e,#d6ac60);--pp-bg1:light-dark(#f0f2ed,#293833);--pp-bg2:light-dark(#dce6df,#25343c);--pp-shadow:light-dark(#374d3b20,#00000038);--pp-low:light-dark(#b32935,#ffb0b9);--pp-low-bg:light-dark(#fce9ec,#502c34);--pp-mid:light-dark(#955009,#ffd095);--pp-mid-bg:light-dark(#fff0da,#4b3926);--pp-high:light-dark(#266d43,#a2dfb9);--pp-high-bg:light-dark(#e5f3e9,#293e31);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif;color:var(--pp-ink)}
+#pm-pet-multi *{box-sizing:border-box}
+#pm-pet-multi .pp-caption{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:0 0 10px;font-size:12px;color:var(--pp-muted)}
+#pm-pet-multi .pp-caption-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+#pm-pet-multi .pp-demo-lifecycle{font:inherit;border:0;border-bottom:1px solid var(--pp-line);padding:0 0 1px;background:transparent;color:var(--pp-green)}
+#pm-pet-multi .pp-preview-controls{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:0 0 12px}
+#pm-pet-multi .pp-preview-controls button{font-size:12px;border:1px solid var(--pp-line);border-radius:8px;background:var(--pp-paper);padding:5px 10px;color:var(--pp-muted)}
+#pm-pet-multi .pp-preview-controls button[aria-pressed=true]{color:var(--pp-ink);background:var(--pp-bg2);border-color:var(--pp-muted)}
+#pm-pet-multi .pp-preview-controls button:disabled{opacity:.5;cursor:default}
+#pm-pet-multi .pp-scene{position:relative;height:490px;background:linear-gradient(140deg,var(--pp-bg1),var(--pp-bg2));border-radius:16px;isolation:isolate}
+#pm-pet-multi .pp-corner{position:absolute;top:16px;left:18px;font-size:12px;color:var(--pp-muted);pointer-events:none}
+#pm-pet-multi button{font:inherit;color:inherit;cursor:pointer}
+#pm-pet-multi .pp-panel{position:absolute;z-index:4;width:312px;max-width:calc(100% - 24px);padding:14px 16px;background:var(--pp-paper);border:1px solid var(--pp-line);border-radius:18px;box-shadow:0 12px 32px var(--pp-shadow)}
+#pm-pet-multi .pp-panel::after{content:"";position:absolute;left:var(--pp-tail-x,50%);bottom:-6px;width:10px;height:10px;transform:translateX(-50%) rotate(45deg);background:var(--pp-paper);border-right:1px solid var(--pp-line);border-bottom:1px solid var(--pp-line);pointer-events:none}
+#pm-pet-multi .pp-panel:not([hidden]){animation:pp-panel-in .14s cubic-bezier(.22,1,.36,1)}
+#pm-pet-multi .pp-header{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;color:var(--pp-muted)}
+#pm-pet-multi .pp-header>span:first-child{min-width:0;overflow-wrap:anywhere}
+#pm-pet-multi .pp-header-right{display:flex;align-items:center;gap:6px;flex-shrink:0}
+#pm-pet-multi .pp-close{border:0;padding:2px 6px;background:transparent;border-radius:6px;font-size:19px;line-height:22px}
+#pm-pet-multi .pp-title{font-size:16px;font-weight:500;margin:7px 0 11px}
+#pm-pet-multi .pp-progress-meta{display:flex;justify-content:space-between;gap:10px;font-size:12px;color:var(--pp-muted);font-variant-numeric:tabular-nums}
+#pm-pet-multi .pp-progress-track{height:5px;background:var(--pp-line);border-radius:4px;margin-top:7px;overflow:hidden}
+#pm-pet-multi .pp-progress-fill{display:block;height:100%;width:0;background:var(--pp-green);border-radius:inherit;transition:width .2s ease-out}
+#pm-pet-multi .pp-sync-note{margin-top:6px;font-size:11px;color:var(--pp-muted)}
+#pm-pet-multi .pp-panel[data-waiting=true] .pp-progress-fill{background:var(--pp-mid)}
+#pm-pet-multi .pp-road{margin-top:9px;font-size:12px;color:var(--pp-muted)}
+#pm-pet-multi .pp-road summary{cursor:pointer;width:fit-content}
+#pm-pet-multi .pp-road ol{list-style:none;margin:9px 0 0;padding:0;display:grid;gap:7px}
+#pm-pet-multi .pp-step{display:flex;gap:8px;align-items:baseline;line-height:1.5}
+#pm-pet-multi .pp-step-mark{width:12px;flex:none}
+#pm-pet-multi .pp-step[data-status=current]{color:var(--pp-green);font-weight:500}
+#pm-pet-multi .pp-step[data-status=blocked]{color:var(--pp-mid);font-weight:500}
+#pm-pet-multi .pp-step[data-status=done] .pp-step-mark{color:var(--pp-green)}
+#pm-pet-multi .pp-question{background:var(--pp-warm);border-radius:10px;padding:10px;margin-top:12px}
+#pm-pet-multi .pp-question p{font-size:13px;margin:0 0 8px;line-height:1.5}
+#pm-pet-multi .pp-question-label{display:block;font-size:11px;font-weight:500;margin-bottom:5px;color:var(--pp-ink)}
+#pm-pet-multi .pp-panel[data-waiting=true] [data-status]{color:var(--pp-mid)}
+#pm-pet-multi .pp-return{width:100%;padding:7px 10px;border:1px solid var(--pp-line);border-radius:7px;background:var(--pp-paper);font-size:12px}
+#pm-pet-multi .pp-settings{margin-top:12px;padding-top:9px;border-top:1px solid var(--pp-line)}
+#pm-pet-multi .pp-settings summary{font-size:12px;color:var(--pp-muted);cursor:pointer;width:fit-content}
+#pm-pet-multi .pp-usage-setting{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--pp-muted);margin-top:10px}
+#pm-pet-multi .pp-usage-setting input{accent-color:var(--pp-green)}
+#pm-pet-multi .pp-size-control{display:flex;align-items:center;gap:8px;margin-top:9px;font-size:12px;color:var(--pp-muted)}
+#pm-pet-multi .pp-size-label{white-space:nowrap}
+#pm-pet-multi .pp-size-input{width:100%;min-width:0;margin:0;accent-color:var(--pp-green)}
+#pm-pet-multi .pp-size-value{min-width:34px;text-align:right;font-variant-numeric:tabular-nums;color:var(--pp-ink)}
+#pm-pet-multi .pp-usage-dock{position:absolute;z-index:3;width:max-content;max-width:calc(100% - 24px);display:flex;flex-direction:column;align-items:center;gap:6px}
+#pm-pet-multi .pp-usage-row{display:flex;justify-content:center;gap:6px;flex-wrap:wrap}
+#pm-pet-multi .pp-usage-pill{display:flex;align-items:center;gap:5px;padding:5px 6px 5px 9px;border-radius:9px;background:var(--pp-paper);box-shadow:0 2px 8px var(--pp-shadow);font-size:11px;white-space:nowrap;color:var(--pp-muted)}
+#pm-pet-multi .pp-usage-pill strong{padding:1px 5px;border-radius:5px;font-weight:500;font-variant-numeric:tabular-nums;color:var(--pp-ink);background:var(--pp-bg1)}
+#pm-pet-multi .pp-usage-pill[data-tone=low] strong{color:var(--pp-low);background:var(--pp-low-bg)}
+#pm-pet-multi .pp-usage-pill[data-tone=mid] strong{color:var(--pp-mid);background:var(--pp-mid-bg)}
+#pm-pet-multi .pp-usage-pill[data-tone=high] strong{color:var(--pp-high);background:var(--pp-high-bg)}
+#pm-pet-multi .pp-window-hide,#pm-pet-multi .pp-unavailable-hide{border:0;padding:0 4px;border-radius:5px;background:transparent;color:var(--pp-muted);font-size:16px;line-height:22px}
+#pm-pet-multi .pp-usage-restore{background:var(--pp-paper);border:1px solid var(--pp-line);border-radius:20px;font-size:11px;padding:4px 11px;box-shadow:0 2px 8px var(--pp-shadow);white-space:nowrap}
+#pm-pet-multi .pp-unavailable{display:flex;align-items:center;gap:6px;background:var(--pp-paper);border-radius:9px;padding:5px 8px;font-size:11px;color:var(--pp-muted)}
+#pm-pet-multi .pp-pet{position:absolute;z-index:2;width:92px;height:104px;border:0;padding:0;background:transparent;touch-action:none;user-select:none;cursor:grab;border-radius:30px;transform-origin:top left}
+#pm-pet-multi .pp-pet.pp-dragging{cursor:grabbing}
+#pm-pet-multi .pp-update-dot{position:absolute;z-index:3;width:8px;height:8px;border-radius:50%;background:var(--pp-green);box-shadow:0 0 0 2px var(--pp-paper);pointer-events:none}
+#pm-pet-multi .pp-shadow{position:absolute;width:63px;height:8px;left:14px;bottom:4px;background:var(--pp-shadow);border-radius:50%}
+#pm-pet-multi .pp-owl{position:absolute;width:76px;height:78px;left:8px;bottom:10px;background:var(--pp-fur);border-radius:45% 45% 43% 43%;transform-origin:50% 100%;animation:pp-breathe 4s ease-in-out infinite;box-shadow:inset -4px -3px 0 var(--pp-wing)}
+#pm-pet-multi .pp-tuft{position:absolute;top:-7px;width:18px;height:20px;background:var(--pp-fur);border-radius:80% 10% 0 0}
+#pm-pet-multi .pp-tuft.pp-left{left:4px;transform:rotate(-18deg)}#pm-pet-multi .pp-tuft.pp-right{right:4px;transform:scaleX(-1) rotate(-18deg)}
+#pm-pet-multi .pp-belly{position:absolute;bottom:5px;left:16px;width:44px;height:30px;background:var(--pp-cream);border-radius:50% 50% 43% 43%}
+#pm-pet-multi .pp-feathers{position:absolute;bottom:8px;left:26px;display:flex;gap:4px}
+#pm-pet-multi .pp-feathers span{height:5px;width:5px;border-bottom:2px solid var(--pp-fur);border-radius:0 0 50% 50%}
+#pm-pet-multi .pp-disc{position:absolute;top:10px;width:37px;height:42px;background:var(--pp-cream);border-radius:50%}
+#pm-pet-multi .pp-disc.pp-left{left:3px;transform:rotate(-8deg)}#pm-pet-multi .pp-disc.pp-right{right:3px;transform:rotate(8deg)}
+#pm-pet-multi .pp-eye{position:absolute;top:10px;left:9px;width:20px;height:23px;background:var(--pp-face);border-radius:50%;animation:pp-blink 6s infinite;transform-origin:50% 55%}
+#pm-pet-multi .pp-eye:before{content:"";position:absolute;top:4px;right:3px;width:7px;height:8px;background:var(--pp-eye-white);border-radius:50%}
+#pm-pet-multi .pp-eye:after{content:"";position:absolute;bottom:4px;left:4px;width:3px;height:3px;background:var(--pp-eye-white);border-radius:50%;opacity:.8}
+#pm-pet-multi .pp-cheek{position:absolute;top:35px;width:9px;height:5px;background:var(--pp-pink);border-radius:50%;opacity:.9}
+#pm-pet-multi .pp-cheek.pp-left{left:8px}#pm-pet-multi .pp-cheek.pp-right{right:8px}
+#pm-pet-multi .pp-beak{position:absolute;left:33px;top:36px;width:10px;height:11px;background:var(--pp-gold);border-radius:3px 3px 6px 3px;transform:rotate(45deg)}
+#pm-pet-multi .pp-wing{position:absolute;top:40px;width:15px;height:29px;background:var(--pp-wing);border-radius:65% 35% 65% 35%;transform-origin:50% 10%}
+#pm-pet-multi .pp-wing.pp-left{left:-4px;transform:rotate(-12deg)}#pm-pet-multi .pp-wing.pp-right{right:-4px;transform:rotate(12deg)}
+#pm-pet-multi .pp-foot{position:absolute;bottom:-2px;width:16px;height:7px;background:var(--pp-gold);border-radius:50%}
+#pm-pet-multi .pp-foot.pp-left{left:13px}#pm-pet-multi .pp-foot.pp-right{right:13px}
+#pm-pet-multi .pp-needed{position:absolute;z-index:3;white-space:nowrap;font-size:11px;padding:3px 8px;background:var(--pp-warm);border:1px solid var(--pp-line);border-radius:20px;color:var(--pp-ink);pointer-events:none}
+#pm-pet-multi .pp-baby{position:absolute;width:30px;height:31px;bottom:8px;left:-31px;transform-origin:50% 100%;pointer-events:none}
+#pm-pet-multi .pp-baby[data-agent=two]{left:-67px;bottom:13px}
+#pm-pet-multi .pp-chick{position:absolute;width:30px;height:31px;bottom:0;left:0;background:var(--pp-chick);border-radius:47% 47% 43% 43%;box-shadow:inset -2px -2px 0 var(--pp-chick-wing);transform-origin:50% 100%}
+#pm-pet-multi .pp-baby[data-phase=working] .pp-chick{animation:pp-breathe 3.5s ease-in-out infinite}
+#pm-pet-multi .pp-baby[data-agent=two] .pp-chick{animation-delay:-1s}
+#pm-pet-multi .pp-chick:before{content:"";position:absolute;left:12px;top:-5px;width:7px;height:8px;border-top:3px solid var(--pp-chick-wing);border-radius:50%;transform:rotate(-25deg)}
+#pm-pet-multi .pp-chick-eyes{position:absolute;left:7px;top:10px;width:4px;height:5px;border-radius:50%;background:var(--pp-face);box-shadow:12px 0 0 var(--pp-face)}
+#pm-pet-multi .pp-chick-beak{position:absolute;left:13px;top:16px;width:5px;height:5px;background:var(--pp-gold);border-radius:1px;transform:rotate(45deg)}
+#pm-pet-multi .pp-chick-wing{position:absolute;top:18px;left:-2px;width:6px;height:9px;background:var(--pp-chick-wing);border-radius:50%;transform:rotate(-20deg)}
+#pm-pet-multi .pp-chick-wing.pp-right{left:auto;right:-2px;transform:rotate(20deg)}
+#pm-pet-multi .pp-chick-feet{position:absolute;bottom:-2px;left:6px;width:7px;height:4px;background:var(--pp-gold);border-radius:50%;box-shadow:11px 0 0 var(--pp-gold)}
+#pm-pet-multi .pp-shell{position:absolute;left:-1px;width:32px;background:var(--pp-cream);box-shadow:inset -3px -2px 0 var(--pp-chick-wing);opacity:0}
+#pm-pet-multi .pp-shell-top{top:-7px;height:26px;border-radius:55% 55% 0 0;clip-path:polygon(0 0,100% 0,100% 88%,82% 78%,63% 100%,43% 80%,23% 100%,0 84%)}
+#pm-pet-multi .pp-shell-bottom{bottom:-3px;height:24px;border-radius:0 0 50% 50%;clip-path:polygon(0 14%,22% 29%,43% 6%,63% 27%,83% 6%,100% 18%,100% 100%,0 100%)}
+#pm-pet-multi .pp-baby-done{position:absolute;top:-20px;left:9px;font-size:12px;font-weight:500;color:var(--pp-green);opacity:0}
+#pm-pet-multi .pp-baby[data-phase=hatching]{animation:pp-hatch .9s cubic-bezier(.22,1,.36,1) both}
+#pm-pet-multi .pp-baby[data-phase=hatching] .pp-chick{animation:pp-emerge .9s cubic-bezier(.22,1,.36,1) both}
+#pm-pet-multi .pp-baby[data-phase=hatching] .pp-shell-top{animation:pp-shell-open .9s cubic-bezier(.22,1,.36,1) both}
+#pm-pet-multi .pp-baby[data-phase=hatching] .pp-shell-bottom{animation:pp-shell-drop .9s cubic-bezier(.22,1,.36,1) both}
+#pm-pet-multi .pp-baby[data-phase=leaving]{animation:pp-fledge 1.1s cubic-bezier(.25,1,.5,1) both}
+#pm-pet-multi .pp-baby[data-phase=leaving] .pp-chick-wing{animation:pp-flutter .18s ease-in-out infinite;transform-origin:50% 0}
+#pm-pet-multi .pp-baby[data-phase=leaving] .pp-baby-done{animation:pp-done 1.1s ease-out both}
+#pm-pet-multi .pp-planning .pp-owl{animation:pp-think 4.2s ease-in-out infinite}
+#pm-pet-multi .pp-checking .pp-disc{animation:pp-inspect 2.5s ease-in-out infinite}
+#pm-pet-multi .pp-pet[data-activity=complete] .pp-owl{animation:pp-celebrate .65s ease-in-out 2}
+#pm-pet-multi .pp-pet[data-activity=complete] .pp-wing{top:26px;transform:rotate(-40deg)}
+#pm-pet-multi .pp-pet[data-activity=complete] .pp-wing.pp-right{transform:rotate(40deg)}
+#pm-pet-multi .pp-brow{position:absolute;left:11px;top:6px;width:16px;height:3px;background:var(--pp-face);border-radius:50%;opacity:0}
+#pm-pet-multi .pp-book,#pm-pet-multi .pp-magic,#pm-pet-multi .pp-lantern{display:none;position:absolute;pointer-events:none}
+#pm-pet-multi .pp-book{left:7px;top:53px;width:62px;height:28px;z-index:5;transform-origin:50% 75%}
+#pm-pet-multi .pp-book-leaf{position:absolute;left:0;top:0;width:31px;height:25px;background:var(--pp-cream);border:3px solid var(--pp-green);border-top-width:2px;border-radius:3px 8px 2px 3px;box-shadow:0 2px 0 var(--pp-wing);transform:skewY(8deg)}
+#pm-pet-multi .pp-book-leaf.pp-right{left:31px;border-radius:8px 3px 3px 2px;transform:skewY(-8deg)}
+#pm-pet-multi .pp-book-leaf::after,#pm-pet-multi .pp-book-page::after{content:"";position:absolute;left:5px;right:5px;top:6px;height:1px;background:var(--pp-fur);box-shadow:0 4px 0 var(--pp-fur),0 8px 0 var(--pp-fur);opacity:.55}
+#pm-pet-multi .pp-book-page{position:absolute;left:31px;top:0;width:27px;height:21px;background:var(--pp-eye-white);border-radius:5px 2px 2px 1px;transform-origin:0 50%;transform:skewY(-8deg)}
+#pm-pet-multi .pp-book-ribbon{position:absolute;left:39px;top:19px;width:4px;height:10px;background:var(--pp-gold);clip-path:polygon(0 0,100% 0,100% 100%,50% 75%,0 100%)}
+#pm-pet-multi .pp-pet[data-activity=reading] .pp-book{display:block;animation:pp-book-rock 4s ease-in-out infinite}
+#pm-pet-multi .pp-pet[data-activity=reading] .pp-book-page{animation:pp-page-turn 3.8s cubic-bezier(.25,1,.5,1) infinite}
+#pm-pet-multi .pp-pet[data-activity=reading] .pp-eye{animation:pp-read-eyes 3.8s ease-in-out infinite}
+#pm-pet-multi .pp-pet[data-activity=reading] .pp-brow{opacity:.55;transform:translateY(2px) rotate(7deg)}
+#pm-pet-multi .pp-pet[data-activity=reading] .pp-disc.pp-right .pp-brow{transform:translateY(2px) rotate(-7deg)}
+#pm-pet-multi .pp-pet[data-activity=reading] .pp-wing{top:50px;z-index:6;height:23px}
+#pm-pet-multi .pp-pet[data-activity=reading] .pp-wing.pp-left{left:0;transform:rotate(-42deg)}
+#pm-pet-multi .pp-pet[data-activity=reading] .pp-wing.pp-right{right:0;animation:pp-turn-wing 3.8s ease-in-out infinite}
+#pm-pet-multi .pp-magic{inset:0;z-index:7}
+#pm-pet-multi .pp-wand{position:absolute;left:60px;top:16px;width:4px;height:37px;border-radius:3px;background:var(--pp-wing);box-shadow:inset 0 -9px 0 var(--pp-gold);transform-origin:50% 90%;transform:rotate(24deg)}
+#pm-pet-multi .pp-wand::before{content:"";position:absolute;left:-5px;top:-6px;width:14px;height:14px;background:var(--pp-gold);clip-path:polygon(50% 0,62% 34%,100% 38%,72% 61%,80% 100%,50% 78%,20% 100%,28% 61%,0 38%,38% 34%)}
+#pm-pet-multi .pp-spark{position:absolute;left:46px;top:1px;width:9px;height:9px;background:var(--pp-gold);clip-path:polygon(50% 0,64% 36%,100% 50%,64% 64%,50% 100%,36% 64%,0 50%,36% 36%);opacity:0}
+#pm-pet-multi .pp-spark:nth-child(3){left:25px;top:12px;width:7px;height:7px;--pp-spark-delay:.12s}
+#pm-pet-multi .pp-spark:nth-child(4){left:66px;top:2px;width:6px;height:6px;--pp-spark-delay:.24s}
+#pm-pet-multi .pp-pet[data-activity=magic] .pp-magic{display:block}
+#pm-pet-multi .pp-pet[data-activity=magic] .pp-owl{animation:pp-cast 1.2s cubic-bezier(.25,1,.5,1) both}
+#pm-pet-multi .pp-pet[data-activity=magic] .pp-wand{animation:pp-wand-swish 1.2s cubic-bezier(.25,1,.5,1) both}
+#pm-pet-multi .pp-pet[data-activity=magic] .pp-spark{animation:pp-sparkle .85s cubic-bezier(.25,1,.5,1) var(--pp-spark-delay,.06s) both}
+#pm-pet-multi .pp-pet[data-activity=magic] .pp-wing.pp-right{top:40px;right:2px;width:13px;height:24px;transform:rotate(-28deg);animation:pp-cast-wing 1.2s cubic-bezier(.25,1,.5,1) both}
+#pm-pet-multi .pp-pet[data-activity=magic] .pp-disc{animation:none}
+#pm-pet-multi .pp-pet[data-activity=magic] .pp-disc.pp-left .pp-eye{animation:pp-wink 1.2s ease-in-out both}
+#pm-pet-multi .pp-pet[data-activity=magic] .pp-cheek{transform:scale(1.15);opacity:1}
+#pm-pet-multi .pp-lantern{left:60px;top:15px;width:22px;height:39px;z-index:7;transform-origin:50% 5px}
+#pm-pet-multi .pp-lantern-handle{position:absolute;left:7px;top:0;width:8px;height:10px;border:2px solid var(--pp-wing);border-radius:50%}
+#pm-pet-multi .pp-lantern-cap{position:absolute;left:2px;top:8px;width:18px;height:5px;background:var(--pp-wing);border-radius:4px 4px 1px 1px}
+#pm-pet-multi .pp-lantern-light{position:absolute;left:3px;top:12px;width:16px;height:22px;background:var(--pp-chick);border:2px solid var(--pp-gold);border-radius:3px 3px 6px 6px;box-shadow:inset 3px 0 0 var(--pp-eye-white)}
+#pm-pet-multi .pp-lantern-light::after{content:"";position:absolute;left:5px;top:4px;width:3px;height:10px;border-radius:50%;background:var(--pp-eye-white)}
+#pm-pet-multi .pp-lantern-base{position:absolute;left:2px;top:33px;width:18px;height:4px;background:var(--pp-wing);border-radius:1px 1px 3px 3px}
+#pm-pet-multi .pp-lantern-halo{position:absolute;left:-5px;top:6px;width:32px;height:34px;background:var(--pp-gold);border-radius:50%;opacity:.2}
+#pm-pet-multi .pp-pet[data-activity=attention] .pp-lantern{display:block;animation:pp-lantern-lift .45s cubic-bezier(.22,1,.36,1) both,pp-lantern-sway 4.5s ease-in-out .45s infinite}
+#pm-pet-multi .pp-pet[data-activity=attention] .pp-lantern-halo{animation:pp-lamp-glow 4.5s ease-in-out infinite}
+#pm-pet-multi .pp-pet[data-activity=attention] .pp-owl{animation:pp-look-up .45s cubic-bezier(.22,1,.36,1) both}
+#pm-pet-multi .pp-pet[data-activity=attention] .pp-wing.pp-right{top:30px;right:-1px;transform:rotate(-46deg)}
+#pm-pet-multi .pp-pet[data-activity=attention] .pp-eye{animation:pp-wait-eyes 6s ease-in-out infinite}
+#pm-pet-multi .pp-pet[data-activity=attention] .pp-brow{opacity:.8;transform:translateY(-2px) rotate(-14deg)}
+#pm-pet-multi .pp-pet[data-activity=attention] .pp-disc.pp-right .pp-brow{transform:translateY(-3px) rotate(12deg)}
+#pm-pet-multi .pp-pet[data-activity=attention] .pp-beak{transform:rotate(45deg) scaleY(1.12)}
+#pm-pet-multi .pp-pet[data-activity=complete] .pp-eye{transform:scaleY(.7)}
+#pm-pet-multi .pp-attention .pp-baby,#pm-pet-multi .pp-attention .pp-baby *{animation-play-state:paused!important}
+#pm-pet-multi .pp-help{font-size:12px;color:var(--pp-muted);margin-top:10px;min-height:18px}
+#pm-pet-multi .pp-live{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+#pm-pet-multi [hidden]{display:none!important}
+@keyframes pp-breathe{0%,100%{transform:translateY(0) scaleY(1)}50%{transform:translateY(-2px) scaleY(1.025)}}
+@keyframes pp-blink{0%,43%,47%,100%{transform:scaleY(1)}45%{transform:scaleY(.12)}}
+@keyframes pp-think{0%,100%{transform:rotate(0)}30%,55%{transform:rotate(-6deg) translateY(-1px)}}
+@keyframes pp-inspect{0%,100%{translate:-1px 0}50%{translate:1px 0}}
+@keyframes pp-celebrate{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
+@keyframes pp-hatch{0%{transform:scale(.7);opacity:0}15%{transform:rotate(-9deg);opacity:1}28%{transform:rotate(9deg)}42%{transform:rotate(-5deg)}60%,100%{transform:rotate(0)}}
+@keyframes pp-emerge{0%,28%{opacity:0;transform:translateY(10px) scale(.5)}48%{opacity:1;transform:translateY(-4px) scale(.9)}100%{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes pp-shell-open{0%,28%{opacity:1;transform:translateY(0) rotate(0)}70%,100%{opacity:0;transform:translate(8px,-18px) rotate(28deg)}}
+@keyframes pp-shell-drop{0%,40%{opacity:1;transform:translateY(0)}85%,100%{opacity:0;transform:translateY(5px) scale(.85)}}
+@keyframes pp-fledge{0%{transform:translate(0,0) scale(1);opacity:1}34%{transform:translate(0,-2px) scale(1.28);opacity:1}58%{transform:translate(4px,-10px) scale(1.28) rotate(-6deg);opacity:1}100%{transform:translate(20px,-38px) scale(.7) rotate(8deg);opacity:0}}
+@keyframes pp-flutter{0%,100%{transform:rotate(-55deg)}50%{transform:rotate(50deg)}}
+@keyframes pp-done{0%{opacity:0}20%,60%{opacity:1}100%{opacity:0}}
+@keyframes pp-panel-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pp-book-rock{0%,100%{transform:rotate(-1deg)}50%{transform:rotate(1deg) translateY(1px)}}
+@keyframes pp-page-turn{0%,54%{transform:skewY(-8deg) scaleX(1)}65%{transform:skewY(0) scaleX(.08)}79%,92%{transform:skewY(8deg) scaleX(-1)}100%{transform:skewY(-8deg) scaleX(1)}}
+@keyframes pp-read-eyes{0%,100%{transform:translate(-1px,3px) scaleY(.85)}35%,55%{transform:translate(2px,3px) scaleY(.85)}64%{transform:translate(0,2px) scaleY(.12)}73%{transform:translate(-1px,3px) scaleY(.85)}}
+@keyframes pp-turn-wing{0%,52%,100%{transform:rotate(42deg)}65%,79%{transform:translate(-5px,-3px) rotate(63deg)}}
+@keyframes pp-cast{0%,100%{transform:translateY(0) rotate(0)}20%{transform:translateY(1px) rotate(-5deg)}48%,70%{transform:translateY(-3px) rotate(3deg)}}
+@keyframes pp-wand-swish{0%,100%{transform:rotate(24deg)}20%{transform:rotate(-15deg)}47%,68%{transform:rotate(31deg)}}
+@keyframes pp-cast-wing{0%,100%{transform:rotate(-28deg)}22%{transform:rotate(-10deg)}47%,68%{transform:rotate(-30deg)}}
+@keyframes pp-sparkle{0%,18%{opacity:0;transform:translate(7px,12px) scale(.2) rotate(-30deg)}42%,68%{opacity:1;transform:translate(0,0) scale(1) rotate(0)}100%{opacity:0;transform:translate(-4px,-5px) scale(.5) rotate(35deg)}}
+@keyframes pp-wink{0%,100%{transform:scaleY(1)}25%,66%{transform:scaleY(.13)}78%{transform:scaleY(1)}}
+@keyframes pp-lantern-lift{from{opacity:0;transform:translateY(12px) rotate(12deg)}to{opacity:1;transform:translateY(0) rotate(0)}}
+@keyframes pp-lantern-sway{0%,100%{transform:rotate(-3deg)}50%{transform:rotate(3deg)}}
+@keyframes pp-lamp-glow{0%,100%{opacity:.18;transform:scale(.9)}50%{opacity:.32;transform:scale(1.05)}}
+@keyframes pp-look-up{from{transform:rotate(0)}to{transform:rotate(-3deg)}}
+@keyframes pp-wait-eyes{0%,100%{transform:translate(0,-1px)}45%,65%{transform:translate(1px,-2px)}75%{transform:translate(1px,-2px) scaleY(.12)}80%{transform:translate(0,-1px)}}
+@media(prefers-reduced-motion:reduce){#pm-pet-multi .pp-pet *,#pm-pet-multi .pp-panel{animation:none!important}#pm-pet-multi .pp-progress-fill{transition:none}#pm-pet-multi .pp-pet[data-activity=reading] .pp-eye{transform:translateY(3px) scaleY(.85)}#pm-pet-multi .pp-pet[data-activity=reading] .pp-wing.pp-right{transform:rotate(42deg)}#pm-pet-multi .pp-pet[data-activity=magic] .pp-spark{opacity:1}#pm-pet-multi .pp-pet[data-activity=magic] .pp-disc.pp-left .pp-eye{transform:scaleY(.13)}}
+@media(pointer:coarse){#pm-pet-multi .pp-close,#pm-pet-multi .pp-window-hide,#pm-pet-multi .pp-unavailable-hide{min-width:32px;min-height:36px}#pm-pet-multi .pp-usage-restore,#pm-pet-multi .pp-return{min-height:44px}}
+
+#pm-pet-multi{color-scheme:light dark;--mp-sage:light-dark(#80a88f,#86ad95);--mp-sky:light-dark(#83a4bd,#8faec5);--mp-lilac:light-dark(#aa92b7,#b49fc0);--mp-rose:light-dark(#c38e8c,#c99b99);--mp-sand:light-dark(#b89a72,#c7a981)}
+#pm-pet-multi [hidden]{display:none!important}
+#pm-pet-multi .mp-app{background:var(--pp-bg1);border:1px solid var(--pp-line);border-radius:16px;overflow:clip}
+#pm-pet-multi .mp-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 18px;background:var(--pp-paper);border-bottom:1px solid var(--pp-line)}
+#pm-pet-multi .mp-brand{font-weight:500;white-space:nowrap}
+#pm-pet-multi .mp-manager{min-width:0;flex:1;text-align:right}
+#pm-pet-multi .mp-manager summary{cursor:pointer;list-style:none;font-size:12px;color:var(--pp-muted)}
+#pm-pet-multi .mp-manager summary::-webkit-details-marker{display:none}
+#pm-pet-multi .mp-manager-body{padding:16px 18px;background:var(--pp-paper);border-bottom:1px solid var(--pp-line)}
+#pm-pet-multi .mp-manager-note{margin:0 0 12px;color:var(--pp-muted);font-size:12px}
+#pm-pet-multi .mp-roster{display:grid;gap:0}
+#pm-pet-multi .mp-roster-row{display:grid;grid-template-columns:minmax(110px,1fr) auto auto;align-items:center;gap:16px;padding:9px 0;border-top:1px solid var(--pp-line)}
+#pm-pet-multi .mp-roster-name{display:flex;align-items:center;gap:9px;min-width:0}
+#pm-pet-multi .mp-swatch{width:10px;height:10px;flex:none;border-radius:50%;background:var(--mp-accent)}
+#pm-pet-multi .mp-roster-title{font-size:13px;overflow-wrap:anywhere}
+#pm-pet-multi .mp-switch{display:flex;align-items:center;gap:5px;font-size:12px;white-space:nowrap}
+#pm-pet-multi input[type=checkbox]{accent-color:var(--pp-green);width:16px;height:16px;margin:0}
+#pm-pet-multi .mp-button{background:var(--pp-paper);border:1px solid var(--pp-line);border-radius:7px;padding:6px 10px;font:inherit;font-size:12px;color:var(--pp-ink)}
+#pm-pet-multi .mp-button:disabled{opacity:.5;cursor:default}
+#pm-pet-multi .mp-quiet{background:transparent;border:0;color:var(--pp-muted);font:inherit;font-size:12px;padding:4px}
+#pm-pet-multi .mp-manager-footer{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px}
+#pm-pet-multi .mp-scene{position:relative;isolation:isolate;min-height:440px;background:linear-gradient(160deg,var(--pp-bg1),var(--pp-bg2))}
+#pm-pet-multi .mp-scene-caption{position:absolute;top:16px;left:18px;right:18px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;color:var(--pp-muted);font-size:12px;pointer-events:none}
+#pm-pet-multi .mp-pet-unit{position:absolute;width:92px;height:104px;--pp-fur:var(--mp-accent);--pp-wing:color-mix(in srgb,var(--mp-accent) 70%,#403d35);--pp-chick:color-mix(in srgb,var(--mp-accent) 25%,var(--pp-cream));--pp-chick-wing:color-mix(in srgb,var(--mp-accent) 75%,var(--pp-cream))}
+#pm-pet-multi [data-theme=sage]{--mp-accent:var(--mp-sage)}
+#pm-pet-multi [data-theme=sky]{--mp-accent:var(--mp-sky)}
+#pm-pet-multi [data-theme=lilac]{--mp-accent:var(--mp-lilac)}
+#pm-pet-multi [data-theme=rose]{--mp-accent:var(--mp-rose)}
+#pm-pet-multi [data-theme=sand]{--mp-accent:var(--mp-sand)}
+#pm-pet-multi .mp-pet-unit .pp-pet{left:0;top:0}
+#pm-pet-multi .mp-name{position:absolute;left:46px;transform:translateX(-50%);display:flex;align-items:center;justify-content:center;gap:5px;width:max-content;max-width:155px;padding:3px 6px;border:0;background:transparent;font-size:12px;line-height:1.35;text-align:center}
+#pm-pet-multi .mp-name-text{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+#pm-pet-multi .mp-letter{font-size:11px;font-weight:500;background:var(--pp-paper);color:var(--pp-ink);border-radius:4px;padding:1px 4px;flex:none}
+#pm-pet-multi .mp-dot{position:absolute;right:4px;top:18px;width:7px;height:7px;border-radius:50%;background:var(--pp-green);box-shadow:0 0 0 2px var(--pp-bg1);pointer-events:none}
+#pm-pet-multi .mp-signal{position:absolute;left:46px;transform:translateX(-50%);top:-16px;white-space:nowrap;font-size:11px;background:var(--pp-warm);border:1px solid var(--pp-line);border-radius:16px;padding:2px 8px;cursor:pointer}
+#pm-pet-multi .mp-quota{position:absolute;left:46px;transform:translateX(-50%);width:max-content;max-width:174px;text-align:center}
+#pm-pet-multi .mp-quota .pp-usage-row{gap:4px}
+#pm-pet-multi .mp-quota-caption{display:block;font-size:11px;color:var(--pp-muted);margin-top:4px}
+#pm-pet-multi .mp-panel{z-index:20;width:302px;max-width:calc(100% - 24px);animation:none!important}
+#pm-pet-multi .mp-panel .pp-title{margin:9px 0;font-size:15px}
+#pm-pet-multi .mp-panel .pp-header{gap:8px}
+#pm-pet-multi .mp-panel .pp-header>span{display:flex;align-items:center;gap:6px;min-width:0}
+#pm-pet-multi .mp-panel .pp-question p{overflow-wrap:anywhere}
+#pm-pet-multi .mp-panel-footer{display:flex;justify-content:space-between;gap:8px;margin-top:10px}
+#pm-pet-multi .mp-panel .pp-settings{margin-top:10px}
+#pm-pet-multi .mp-status{font-size:11px;color:var(--pp-muted)}
+#pm-pet-multi .mp-preview{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:var(--pp-muted)}
+#pm-pet-multi .mp-preview select{font:inherit;max-width:100%;background:var(--pp-paper);color:var(--pp-ink);border:1px solid var(--pp-line);border-radius:7px;padding:6px 8px}
+#pm-pet-multi .mp-feedback{font-size:12px;margin-top:8px;color:var(--pp-muted);min-height:18px;overflow-wrap:anywhere}
+#pm-pet-multi .mp-error{color:var(--pp-low);font-size:12px;margin:10px 0 0}
+#pm-pet-multi .mp-empty{position:absolute;top:40%;left:18px;right:18px;text-align:center;color:var(--pp-muted);font-size:13px}
+#pm-pet-multi .mp-scale{display:flex;align-items:center;gap:10px;margin-top:10px;font-size:12px}
+#pm-pet-multi .mp-scale input{min-width:0;width:100%;accent-color:var(--pp-green)}
+#pm-pet-multi .mp-scale output{min-width:36px}
+#pm-pet-multi .pp-pet.pp-waiting .pp-baby,#pm-pet-multi .pp-pet.pp-waiting .pp-baby *{animation-play-state:paused!important}
+@media(max-width:480px){#pm-pet-multi .mp-bar{padding:12px}#pm-pet-multi .mp-manager-body{padding:12px}#pm-pet-multi .mp-roster-row{gap:8px;grid-template-columns:minmax(90px,1fr) auto auto}#pm-pet-multi .mp-button{padding:6px}#pm-pet-multi .mp-roster-title{font-size:12px}}
+@media(pointer:coarse){#pm-pet-multi .mp-button,#pm-pet-multi .mp-quiet,#pm-pet-multi .mp-switch,#pm-pet-multi .mp-name{min-height:44px}#pm-pet-multi .mp-panel .pp-close{min-height:44px;min-width:44px}}
+</style>
+<div class="mp-app">
+  <div class="mp-bar"><span class="mp-brand">PM Pet</span><details class="mp-manager"><summary><span data-i18n="manage">Manage pets</span> · <span class="mp-capacity">5 / 5</span> ▾</summary></details></div>
+  <div class="mp-manager-body" hidden>
+    <p class="mp-manager-note" data-i18n="managerNote">Up to 5 conversation pets. Account usage is shared.</p>
+    <div class="mp-roster"></div>
+    <div class="mp-manager-footer"><button class="mp-button mp-arrange" type="button" data-i18n="arrange">Arrange pets</button><span class="mp-schedule"></span></div>
+    <p class="mp-error" role="alert" hidden></p>
+  </div>
+  <div class="mp-scene">
+    <div class="mp-scene-caption"><span data-i18n="desktop">Your desktop</span><span data-i18n="example">Design preview · Sample conversations & usage</span></div>
+    <div class="mp-empty" hidden data-i18n="empty">No pets enabled. Open Manage pets to bring one back.</div>
+    <section class="pp-panel mp-panel" id="mp-panel" aria-label="Conversation progress" hidden>
+      <div class="pp-header"><span><i class="mp-swatch" aria-hidden="true"></i><span class="mp-panel-name"></span></span><button class="pp-close" type="button" aria-label="Hide progress">×</button></div>
+      <div class="mp-status"></div><div class="pp-title"></div>
+      <div class="pp-progress-meta"><span class="mp-count"></span><span class="mp-percent"></span></div>
+      <div class="pp-progress-track" role="progressbar" aria-label="Roadmap completion" aria-valuemin="0" aria-valuemax="100"><span class="pp-progress-fill"></span></div>
+      <details class="pp-road"><summary data-i18n="roadmap">View roadmap</summary><ol></ol></details>
+      <div class="pp-question" hidden><span class="pp-question-label" data-i18n="decision">Your decision</span><p></p><button class="pp-return" type="button" data-i18n="answer">Answer in Codex ↗</button></div>
+      <details class="pp-settings"><summary data-i18n="settings">Pet settings</summary>
+        <label class="pp-usage-setting"><input class="mp-quota-toggle" type="checkbox"><span data-i18n="showUsage">Show account usage here</span></label>
+        <label class="mp-scale"><span data-i18n="size">Size</span><input type="range" class="mp-size" min="75" max="150" step="5" value="100" aria-label="Pet size"><output>100%</output></label>
+        <div class="mp-panel-footer"><button class="mp-quiet mp-open-chat" type="button" data-i18n="open">Open in Codex ↗</button><button class="mp-quiet mp-disable" type="button" data-i18n="disable">Disable pet</button></div>
+      </details>
+    </section>
+  </div>
+</div>
+<div class="mp-preview" aria-label="Demo controls"><label><span data-i18n="try">Try</span> <select class="mp-demo-select" aria-label="Demo conversation"></select></label><button type="button" class="mp-button mp-advance" data-i18n="advance">Advance step</button><button type="button" class="mp-button mp-ask" data-i18n="needs">Needs you</button><button type="button" class="mp-button mp-resolve" data-i18n="received" hidden>Answer received</button><button type="button" class="mp-button mp-chicks" data-i18n="chicks">Subagents</button></div>
+<div class="mp-feedback" role="status" aria-live="polite">Drag an owl · Click for progress · Double-click to return</div>
+<template class="mp-owl-template">  <button class="pp-pet" type="button" aria-label="Toggle progress. Drag to move. Double-click to return to Codex." aria-expanded="false" aria-controls="mp-panel">
+    <span class="pp-shadow" aria-hidden="true"></span>
+    <span class="pp-owl" aria-hidden="true">
+      <span class="pp-tuft pp-left"></span><span class="pp-tuft pp-right"></span><span class="pp-belly"></span><span class="pp-feathers"><span></span><span></span><span></span></span>
+      <span class="pp-disc pp-left"><span class="pp-eye"></span><span class="pp-brow"></span></span><span class="pp-disc pp-right"><span class="pp-eye"></span><span class="pp-brow"></span></span>
+      <span class="pp-cheek pp-left"></span><span class="pp-cheek pp-right"></span><span class="pp-beak"></span><span class="pp-wing pp-left"></span><span class="pp-wing pp-right"></span><span class="pp-foot pp-left"></span><span class="pp-foot pp-right"></span>
+      <span class="pp-book"><span class="pp-book-leaf"></span><span class="pp-book-leaf pp-right"></span><span class="pp-book-page"></span><span class="pp-book-ribbon"></span></span>
+      <span class="pp-magic"><span class="pp-wand"></span><span class="pp-spark"></span><span class="pp-spark"></span><span class="pp-spark"></span></span>
+      <span class="pp-lantern"><span class="pp-lantern-halo"></span><span class="pp-lantern-handle"></span><span class="pp-lantern-cap"></span><span class="pp-lantern-light"></span><span class="pp-lantern-base"></span></span>
+    </span>
+    <span class="pp-baby" data-agent="one" data-phase="none" aria-hidden="true" hidden><span class="pp-chick"><span class="pp-chick-eyes"></span><span class="pp-chick-beak"></span><span class="pp-chick-wing"></span><span class="pp-chick-wing pp-right"></span><span class="pp-chick-feet"></span></span><span class="pp-shell pp-shell-top"></span><span class="pp-shell pp-shell-bottom"></span><span class="pp-baby-done">✓</span></span>
+    <span class="pp-baby" data-agent="two" data-phase="none" aria-hidden="true" hidden><span class="pp-chick"><span class="pp-chick-eyes"></span><span class="pp-chick-beak"></span><span class="pp-chick-wing"></span><span class="pp-chick-wing pp-right"></span><span class="pp-chick-feet"></span></span><span class="pp-shell pp-shell-top"></span><span class="pp-shell pp-shell-bottom"></span><span class="pp-baby-done">✓</span></span>
+  </button></template>
+<script>
+/* PM Pet interaction model. Sample data only; no agent control or network activity. */
+(function (root) {
+  'use strict';
+  const THEMES = Object.freeze(['sage', 'sky', 'lilac', 'rose', 'sand']);
+  const MAX_ENABLED = 5;
+  const RUNNING_PHASES = new Set(['planning', 'building', 'checking']);
+  const PHASES = new Set(['idle', ...RUNNING_PHASES, 'waiting', 'complete']);
+  const copy = value => JSON.parse(JSON.stringify(value));
+  const fail = error => ({ ok: false, error });
+  const defaultSteps = () => ['Agree the scope', 'Design the interaction', 'Build the core flow', 'Connect the pieces', 'Verify the result']
+    .map((label, index) => ({ id: 'step-' + index, label, done: index < 2 }));
+
+  function normalizeSteps(steps) {
+    if (!Array.isArray(steps)) return defaultSteps();
+    const seen = new Set();
+    return steps.filter(step => step && typeof step.id === 'string' && !seen.has(step.id) && seen.add(step.id))
+      .map(step => ({ id: step.id, label: String(step.label || step.id), done: step.done === true }));
+  }
+
+  function normalizeQuota(input) {
+    const windows = {};
+    for (const value of Object.values(input && input.windows || {})) {
+      if (!value || !Number.isFinite(value.remainingPercent)) continue;
+      const key = value.windowDurationMins === 300 ? 'five' : value.windowDurationMins === 10080 ? 'week' : null;
+      if (!key) continue;
+      windows[key] = {
+        remainingPercent: Math.max(0, Math.min(100, value.remainingPercent)),
+        windowDurationMins: value.windowDurationMins,
+        resetsAt: Number.isFinite(value.resetsAt) ? value.resetsAt : null
+      };
+    }
+    return { windows, observedAt: input && input.observedAt || null, source: 'sample' };
+  }
+
+  function createStore(options = {}) {
+    let saved = options.saved;
+    if (typeof saved === 'string') {
+      try { saved = JSON.parse(saved); } catch (_) { saved = null; }
+    }
+    if (!saved || saved.version !== 1 || !Array.isArray(saved.pets)) saved = null;
+    const registry = new Map();
+    let hasCreatedPet = Boolean(saved && saved.hasCreatedPet);
+    let quota = normalizeQuota(saved && saved.quota);
+
+    function register(input, restoring) {
+      if (!input || typeof input.id !== 'string' || !input.id || registry.has(input.id)) return;
+      const enabled = restoring && input.enabled === true;
+      const initialized = restoring && (input.hasBeenEnabled === true || enabled);
+      const steps = normalizeSteps(input.steps);
+      const phase = PHASES.has(input.phase) ? input.phase : 'building';
+      const question = input.question && typeof input.question.text === 'string' ? copy(input.question) : null;
+      registry.set(input.id, {
+        id: input.id,
+        title: String(input.title || 'Untitled conversation'),
+        project: String(input.project || ''),
+        theme: THEMES.includes(input.theme) ? input.theme : THEMES[registry.size % THEMES.length],
+        enabled,
+        hasBeenEnabled: initialized,
+        quotaVisible: initialized && input.quotaVisible === true,
+        panelOpen: input.panelOpen === true,
+        size: Number.isFinite(input.size) ? Math.max(75, Math.min(150, input.size)) : 100,
+        position: input.position && Number.isFinite(input.position.x) && Number.isFinite(input.position.y)
+          ? { x: input.position.x, y: input.position.y } : null,
+        phase: question ? 'waiting' : phase === 'waiting' ? 'building' : phase,
+        steps,
+        question,
+        phaseBeforeQuestion: RUNNING_PHASES.has(input.phaseBeforeQuestion) ? input.phaseBeforeQuestion : 'building',
+        decisionHistory: restoring && Array.isArray(input.decisionHistory) ? copy(input.decisionHistory) : [],
+        questionSequence: Number.isInteger(input.questionSequence) ? input.questionSequence : 0
+      });
+      if (initialized) hasCreatedPet = true;
+    }
+
+    if (saved) saved.pets.forEach(pet => register(pet, true));
+    (options.sampleConversations || []).forEach(pet => register(pet, false));
+
+    // Recover edited/old saved data without permitting duplicate active themes or >5 windows.
+    const usedThemes = new Set();
+    for (const pet of registry.values()) {
+      if (!pet.enabled) continue;
+      if (usedThemes.size === MAX_ENABLED) { pet.enabled = false; continue; }
+      if (usedThemes.has(pet.theme)) pet.theme = THEMES.find(theme => !usedThemes.has(theme));
+      usedThemes.add(pet.theme);
+    }
+
+    function mutate(id, action, requireEnabled = false) {
+      const pet = registry.get(id);
+      if (!pet) return fail('not-found');
+      if (requireEnabled && !pet.enabled) return fail('disabled');
+      const error = action(pet);
+      return error ? fail(error) : { ok: true, pet: copy(pet) };
+    }
+
+    function nextPhase(pet) {
+      const pending = pet.steps.filter(step => !step.done);
+      return pending.length === 0 && pet.steps.length ? 'complete' : pending.length === 1 ? 'checking' : 'building';
+    }
+
+    return {
+      list({ enabledOnly = false } = {}) {
+        return copy([...registry.values()].filter(pet => !enabledOnly || pet.enabled));
+      },
+      get(id) { return registry.has(id) ? copy(registry.get(id)) : null; },
+      enable(id) {
+        return mutate(id, pet => {
+          if (pet.enabled) return;
+          const active = [...registry.values()].filter(item => item.enabled);
+          if (active.length >= MAX_ENABLED) return 'capacity';
+          const occupied = new Set(active.map(item => item.theme));
+          if (occupied.has(pet.theme)) pet.theme = THEMES.find(theme => !occupied.has(theme));
+          if (!pet.hasBeenEnabled) {
+            pet.quotaVisible = !hasCreatedPet;
+            pet.hasBeenEnabled = true;
+            hasCreatedPet = true;
+          }
+          pet.enabled = true;
+        });
+      },
+      disable(id) { return mutate(id, pet => { pet.enabled = false; }); },
+      setQuotaVisible(id, visible) {
+        return mutate(id, pet => {
+          if (typeof visible !== 'boolean') return 'invalid-value';
+          pet.quotaVisible = visible;
+        }, true);
+      },
+      setPanelOpen(id, open) {
+        return mutate(id, pet => {
+          if (typeof open !== 'boolean') return 'invalid-value';
+          pet.panelOpen = open;
+        });
+      },
+      setSize(id, size) {
+        return mutate(id, pet => {
+          if (!Number.isFinite(size)) return 'invalid-value';
+          pet.size = Math.max(75, Math.min(150, size));
+        });
+      },
+      setPosition(id, position) {
+        return mutate(id, pet => {
+          if (!position || !Number.isFinite(position.x) || !Number.isFinite(position.y)) return 'invalid-value';
+          pet.position = { x: position.x, y: position.y };
+        });
+      },
+      clearPosition(id) { return mutate(id, pet => { pet.position = null; }); },
+      advance(id) {
+        return mutate(id, pet => {
+          if (pet.phase === 'waiting') return 'waiting';
+          const step = pet.steps.find(item => !item.done);
+          if (!step) return 'complete';
+          step.done = true;
+          pet.phase = nextPhase(pet);
+        }, true);
+      },
+      setPlan(id, steps) {
+        return mutate(id, pet => {
+          if (pet.phase === 'waiting') return 'waiting';
+          if (!Array.isArray(steps)) return 'invalid-value';
+          pet.steps = normalizeSteps(steps);
+          pet.phase = nextPhase(pet);
+        }, true);
+      },
+      setPhase(id, phase) {
+        return mutate(id, pet => {
+          if (pet.phase === 'waiting') return 'waiting';
+          if (!PHASES.has(phase) || phase === 'waiting') return 'invalid-value';
+          if (phase === 'complete' && pet.steps.some(step => !step.done)) return 'unfinished';
+          pet.phase = phase;
+        }, true);
+      },
+      ask(id, text) {
+        return mutate(id, pet => {
+          if (pet.question) return 'waiting';
+          if (typeof text !== 'string' || !text.trim()) return 'invalid-value';
+          pet.phaseBeforeQuestion = pet.phase;
+          pet.questionSequence += 1;
+          pet.question = { id: pet.id + ':question:' + pet.questionSequence, text: text.trim() };
+          pet.phase = 'waiting';
+          pet.panelOpen = true;
+        }, true);
+      },
+      resolve(id, answer) {
+        return mutate(id, pet => {
+          if (!pet.question) return 'no-question';
+          if (typeof answer !== 'string' || !answer.trim()) return 'invalid-value';
+          pet.decisionHistory.push({ ...pet.question, answer: answer.trim() });
+          pet.question = null;
+          pet.phase = pet.phaseBeforeQuestion === 'idle' ? 'idle' : nextPhase(pet);
+        }, true);
+      },
+      progress(id) {
+        const pet = registry.get(id);
+        if (!pet) return null;
+        const done = pet.steps.filter(step => step.done).length;
+        return { done, total: pet.steps.length, percent: pet.steps.length ? Math.round(done / pet.steps.length * 100) : 0 };
+      },
+      setQuota(snapshot) { quota = normalizeQuota(snapshot); return copy(quota); },
+      getQuota() { return copy(quota); },
+      pollIntervalMs() {
+        const active = [...registry.values()].filter(pet => pet.enabled);
+        if (!active.some(pet => pet.quotaVisible)) return null;
+        return active.some(pet => RUNNING_PHASES.has(pet.phase)) ? 60000 : 300000;
+      },
+      toJSON() { return { version: 1, hasCreatedPet, pets: copy([...registry.values()]), quota: copy(quota) }; }
+    };
+  }
+
+  const api = { createStore, THEMES, MAX_ENABLED };
+  root.PMPetModel = api;
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+})(globalThis);
+
+</script>
+<script>
+(function () {
+  'use strict';
+  const root = document.getElementById('pm-pet-multi');
+  const $ = selector => root.querySelector(selector);
+  const scene = $('.mp-scene'), panel = $('.mp-panel'), roster = $('.mp-roster');
+  const feedback = $('.mp-feedback'), demoSelect = $('.mp-demo-select');
+  const storageKey = 'pm-pet-five-design-v1';
+  const samples = [
+    { id: 'signup', title: 'Signup flow', project: 'Workshop', labels: ['Agree the scope', 'Design the form', 'Connect the signup form', 'Handle full capacity', 'Verify the signup flow'] },
+    { id: 'pricing', title: 'Pricing page', project: 'Workshop', labels: ['Agree the pricing story', 'Design plan comparison', 'Build the pricing cards', 'Connect the checkout link', 'Check every plan'] },
+    { id: 'research', title: 'User research', project: 'Research', labels: ['Choose the audience', 'Plan the interviews', 'Organize the findings', 'Review the evidence', 'Agree the next experiment'] },
+    { id: 'portfolio', title: 'Portfolio', project: 'Personal', labels: ['Select the work', 'Design the story', 'Build the case studies', 'Connect the contact form', 'Check mobile layouts'] },
+    { id: 'onboarding', title: 'Onboarding', project: 'Workshop', labels: ['Define the first success', 'Sketch the welcome flow', 'Build the first task', 'Add empty states', 'Check the full journey'] },
+    { id: 'notes', title: 'Meeting notes', project: 'Personal', labels: ['Define the summary', 'Choose the note format', 'Build the capture flow', 'Connect action items', 'Verify the handoff'] }
+  ].map((sample, index) => ({ ...sample, steps: sample.labels.map((label, n) => ({ id: sample.id + '-' + n, label, done: n < (index === 2 ? 1 : 2) })) }));
+  let saved = null, storageAvailable = true;
+  try { saved = JSON.parse(localStorage.getItem(storageKey)); } catch (_) { storageAvailable = false; }
+  if (!saved || saved.version !== 1 || !Array.isArray(saved.pets)) saved = null;
+  const store = PMPetModel.createStore({ saved, sampleConversations: samples });
+  if (!saved) samples.slice(0, 5).forEach(sample => store.enable(sample.id));
+  store.setQuota({ windows: { week: { remainingPercent: 82, windowDurationMins: 10080 } }, observedAt: 'Sample data' });
+  const design = { language: saved && saved.ui && saved.ui.language === 'zh' ? 'zh' : 'en', quotaProfile: 'weekly' };
+  const words = {
+    en: { manage:'Manage pets', managerNote:'Up to 5 conversation pets. Account usage is shared.', arrange:'Arrange pets', desktop:'Your desktop', example:'Design preview · Sample conversations & usage', empty:'No pets enabled. Open Manage pets to bring one back.', roadmap:'View roadmap', decision:'Your decision', answer:'Answer in Codex ↗', settings:'Pet settings', showUsage:'Show account usage here', size:'Size', open:'Open in Codex ↗', disable:'Disable pet', enable:'Enable pet', usage:'Usage', try:'Try', advance:'Advance step', needs:'Needs you', received:'Answer received', chicks:'Subagents', help:'Drag an owl · Click for progress · Double-click to return', shared:'Shared account', sample:'Sample', weekly:'Weekly left', five:'5h left', unavailable:'Usage unavailable', allHidden:'Quota polling off · all displays hidden', activeSchedule:'Shared refresh: 60s while running', idleSchedule:'Shared refresh: 5m while idle', capacity:'All 5 pet slots are in use. Disable one conversation pet before enabling another.', returned:'Preview only — return to Codex:', enabled:'Pet enabled:', disabled:'Pet disabled:', answered:'Demo answer received. This conversation can continue.', pending:'Waiting for a decision', done:'Ready to review', noLive:'Sample state only; no live agent was paused.', storage:'Preferences last for this preview only; browser storage is unavailable.', hideUsage:'Hide account usage', hidePanel:'Hide progress', phase:{building:'Building',planning:'Planning',checking:'Checking',waiting:'Needs your decision',idle:'Idle',complete:'Complete'} },
+    zh: { manage:'管理 Pet', managerNote:'最多 5 只对话 Pet。额度是账户共享数据。', arrange:'整理位置', desktop:'你的桌面', example:'设计预览 · 示例对话与额度', empty:'还没有开启 Pet。可在“管理 Pet”中重新开启。', roadmap:'查看路线图', decision:'需要你决定', answer:'回到 Codex 回答 ↗', settings:'Pet 设置', showUsage:'在这里显示账户额度', size:'大小', open:'打开 Codex 对话 ↗', disable:'停用 Pet', enable:'启用 Pet', usage:'额度', try:'演示', advance:'推进一步', needs:'需要你', received:'已收到回答', chicks:'子 Agent', help:'拖动猫头鹰 · 单击看进度 · 双击回到对话', shared:'账户共享', sample:'示例', weekly:'本周剩余', five:'5h 剩余', unavailable:'额度暂不可用', allHidden:'所有额度已隐藏 · 停止轮询', activeSchedule:'共享刷新：运行中每 60 秒', idleSchedule:'共享刷新：空闲时每 5 分钟', capacity:'5 个 Pet 名额已用完。请先停用一只，再启用其他对话。', returned:'仅作预览 — 回到 Codex：', enabled:'已启用 Pet：', disabled:'已停用 Pet：', answered:'已收到演示回答，此对话可以继续。', pending:'等待你的决定', done:'可以查看成果了', noLive:'仅演示状态，没有暂停真实 Agent。', storage:'浏览器储存不可用，设置仅在本次预览中保留。', hideUsage:'隐藏账户额度', hidePanel:'隐藏进度框', phase:{building:'构建中',planning:'规划中',checking:'验证中',waiting:'等待你决定',idle:'空闲',complete:'已完成'} }
+  };
+  const t = () => words[design.language];
+  const units = new Map(), ui = new Map();
+  let openId = store.list({enabledOnly:true}).find(pet => pet.panelOpen)?.id || null;
+  let demoId = store.list({enabledOnly:true})[0]?.id || samples[0].id;
+  let rendering = false;
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+
+  function save() {
+    try { localStorage.setItem(storageKey, JSON.stringify({ ...store.toJSON(), ui: { language: design.language } })); }
+    catch (_) { storageAvailable = false; }
+  }
+  function announce(message) { feedback.textContent = message; }
+  function el(tag, className, text) {
+    const node = document.createElement(tag); if (className) node.className = className;
+    if (text !== undefined) node.textContent = text; return node;
+  }
+  function runtime(id) {
+    if (!ui.has(id)) ui.set(id, { unread:false, magic:null, click:null, children:[], timers:[], suppressedUntil:0 });
+    return ui.get(id);
+  }
+  function error(result) {
+    if (result.ok) return false;
+    $('.mp-error').textContent = result.error === 'capacity' ? t().capacity : result.error;
+    $('.mp-error').hidden = false; return true;
+  }
+  function clearError() { $('.mp-error').hidden = true; }
+  function toggleEnabled(id) {
+    clearError(); const pet = store.get(id);
+    if (pet.enabled) {
+      store.disable(id); store.setPanelOpen(id,false); stopAnimations(id); if (openId === id) openId = null;
+      announce(t().disabled + ' ' + pet.title);
+    } else {
+      if (error(store.enable(id))) return;
+      announce(t().enabled + ' ' + pet.title);
+    }
+    render(); save();
+    if (!pet.enabled) units.get(id)?.querySelector('.pp-pet').focus({preventScroll:true});
+  }
+  function showPanel(id, toggle = true) {
+    const next = toggle && openId === id ? null : id;
+    store.list().forEach(pet => store.setPanelOpen(pet.id, pet.id === next));
+    openId = next;
+    if (next) { runtime(next).unread = false; demoId = next; }
+    $('.pp-road').open = false; $('.pp-settings').open = false;
+    render(); save();
+    if(next) $('.pp-close').focus({preventScroll:true});
+    else if(id) units.get(id)?.querySelector('.pp-pet').focus({preventScroll:true});
+  }
+  function returnToChat(id) { announce(t().returned + ' ' + store.get(id).title + ' · ' + store.get(id).project); }
+  function setQuota(id, visible) { store.setQuotaVisible(id, visible); render(); save(); }
+
+  function createUnit(pet) {
+    const unit = el('div', 'mp-pet-unit'); unit.dataset.petId = pet.id;
+    unit.append($('.mp-owl-template').content.cloneNode(true));
+    const name = el('button', 'mp-name'); name.type = 'button';
+    name.append(el('span', 'mp-letter', String.fromCharCode(65 + samples.findIndex(s => s.id === pet.id))), el('span', 'mp-name-text', pet.title));
+    const quota = el('div', 'mp-quota'); quota.setAttribute('aria-label', 'Shared account usage');
+    const signal = el('button', 'mp-signal'); signal.type = 'button'; signal.hidden = true;
+    const dot = el('span', 'mp-dot'); dot.hidden = true; dot.setAttribute('aria-hidden', 'true');
+    unit.append(name, quota, signal, dot); scene.append(unit); units.set(pet.id, unit);
+    name.addEventListener('click', () => showPanel(pet.id));
+    signal.addEventListener('click', () => showPanel(pet.id, false));
+    const owl = unit.querySelector('.pp-pet');
+    owl.removeAttribute('aria-label');
+    owl.addEventListener('click', event => {
+      const rt = runtime(pet.id); if (Date.now() < rt.suppressedUntil) return;
+      clearTimeout(rt.click);
+      if (event.detail === 0) { showPanel(pet.id); return; }
+      if (event.detail === 1) rt.click = setTimeout(() => showPanel(pet.id), 240);
+    });
+    owl.addEventListener('dblclick', () => { clearTimeout(runtime(pet.id).click); returnToChat(pet.id); });
+    let drag = null;
+    owl.addEventListener('pointerdown', event => {
+      if (event.button !== 0) return;
+      drag = { x:event.clientX, y:event.clientY, left:parseFloat(unit.style.left), top:parseFloat(unit.style.top), moved:false };
+      owl.setPointerCapture(event.pointerId);
+    });
+    owl.addEventListener('pointermove', event => {
+      if (!drag) return;
+      const dx = event.clientX-drag.x, dy = event.clientY-drag.y;
+      if (!drag.moved && Math.hypot(dx,dy)<5) return;
+      drag.moved = true; owl.classList.add('pp-dragging');
+      store.setPosition(pet.id, {x:drag.left+dx,y:drag.top+dy}); place();
+    });
+    function endDrag(event) {
+      if (!drag) return;
+      if (drag.moved) { runtime(pet.id).suppressedUntil = Date.now()+400; clearTimeout(runtime(pet.id).click); store.setPosition(pet.id,{x:parseFloat(unit.style.left),y:parseFloat(unit.style.top)}); save(); }
+      drag = null; owl.classList.remove('pp-dragging');
+      if (owl.hasPointerCapture(event.pointerId)) owl.releasePointerCapture(event.pointerId);
+    }
+    owl.addEventListener('pointerup', endDrag); owl.addEventListener('pointercancel', endDrag);
+    return unit;
+  }
+  function renderQuota(pet, unit) {
+    const quota = unit.querySelector('.mp-quota'); quota.hidden = !pet.quotaVisible;
+    quota.replaceChildren(); if (!pet.quotaVisible) return;
+    const row = el('div', 'pp-usage-row');
+    const windows = store.getQuota().windows;
+    for (const key of ['five','week']) {
+      if (!windows[key]) continue;
+      const percent = Math.round(windows[key].remainingPercent);
+      const pill = el('span','pp-usage-pill'); pill.dataset.window = key;
+      pill.dataset.tone = percent<=20 ? 'low' : percent<70 ? 'mid' : 'high';
+      pill.append(el('span','',t()[key==='five'?'five':'weekly']),el('strong','',percent+'%')); row.append(pill);
+    }
+    if (!row.children.length) row.append(el('span','pp-unavailable',t().unavailable));
+    const caption = el('span','mp-quota-caption',t().shared+' · ');
+    const hide = el('button','pp-window-hide','×'); hide.type='button'; hide.setAttribute('aria-label',t().hideUsage+' — '+pet.title);
+    hide.addEventListener('click', () => setQuota(pet.id, false)); caption.append(hide);
+    quota.append(row,caption);
+  }
+  function activity(pet) {
+    if (pet.phase === 'waiting') return 'attention';
+    if (runtime(pet.id).magic) return 'magic';
+    return pet.phase === 'building' ? 'reading' : pet.phase;
+  }
+  function renderPanel() {
+    const pet = openId && store.get(openId);
+    panel.hidden = !pet || !pet.enabled; if (panel.hidden) return;
+    panel.dataset.theme = pet.theme; panel.dataset.waiting = String(pet.phase==='waiting');
+    panel.setAttribute('aria-label',pet.title+' — '+t().roadmap);
+    $('.mp-panel-name').textContent = pet.title; $('.mp-status').textContent = pet.project+' · '+t().phase[pet.phase];
+    const current = pet.steps.find(step=>!step.done), progress = store.progress(pet.id);
+    $('.pp-title').textContent = pet.question ? t().pending : current ? current.label : t().done;
+    $('.mp-count').textContent = design.language==='zh' ? progress.done+' / '+progress.total+' 项完成' : progress.done+' of '+progress.total+' steps done';
+    $('.mp-percent').textContent = progress.percent+'%';
+    $('.pp-progress-fill').style.width = progress.percent+'%';
+    $('.pp-progress-track').setAttribute('aria-valuenow',String(progress.percent));
+    const list=$('.pp-road ol'); list.replaceChildren();
+    pet.steps.forEach(step=>{
+      const li=el('li','pp-step'); li.dataset.status=step.done?'done':current&&step.id===current.id?(pet.question?'blocked':'current'):'pending';
+      li.append(el('span','pp-step-mark',step.done?'✓':li.dataset.status==='blocked'?'!':li.dataset.status==='current'?'●':'○'),el('span','',step.label)); list.append(li);
+    });
+    $('.pp-question').hidden=!pet.question; $('.pp-question p').textContent=pet.question ? pet.question.text : '';
+    $('.mp-quota-toggle').checked=pet.quotaVisible; $('.mp-size').value=pet.size; $('.mp-scale output').textContent=pet.size+'%';
+    $('.pp-close').setAttribute('aria-label',t().hidePanel);
+  }
+  function renderRoster() {
+    const focus=document.activeElement, focusRow=focus?.closest('.mp-roster-row');
+    const focusId=focusRow?.dataset.rosterId, focusKind=focus?.tagName;
+    roster.replaceChildren();
+    store.list().forEach(pet=>{
+      const row=el('div','mp-roster-row'); row.dataset.rosterId=pet.id; row.dataset.theme=pet.theme;
+      const name=el('span','mp-roster-name'); name.append(el('i','mp-swatch'),el('span','mp-roster-title',pet.title));
+      const label=el('label','mp-switch'); const input=el('input'); input.type='checkbox'; input.checked=pet.quotaVisible; input.disabled=!pet.enabled;
+      input.setAttribute('aria-label',t().showUsage+' — '+pet.title); input.addEventListener('change',()=>setQuota(pet.id,input.checked));
+      label.append(input,el('span','',t().usage));
+      const button=el('button','mp-button',pet.enabled?t().disable:t().enable); button.type='button';
+      button.setAttribute('aria-label',(pet.enabled?t().disable:t().enable)+' — '+pet.title);
+      button.addEventListener('click',()=>toggleEnabled(pet.id)); row.append(name,label,button); roster.append(row);
+    });
+    const interval=store.pollIntervalMs(); $('.mp-schedule').textContent=interval===null?t().allHidden:interval===60000?t().activeSchedule:t().idleSchedule;
+    $('.mp-schedule').style.fontSize='12px';
+    if(focusId){
+      const row=[...roster.children].find(node=>node.dataset.rosterId===focusId);
+      const target=row?.querySelector(focusKind==='INPUT'?'input':'button');
+      if(target&&!target.disabled)target.focus({preventScroll:true});
+    }
+  }
+  function render() {
+    if (rendering) return; rendering=true;
+    root.querySelectorAll('[data-i18n]').forEach(node=>node.textContent=t()[node.dataset.i18n]);
+    const enabled=store.list({enabledOnly:true});
+    $('.mp-capacity').textContent=enabled.length+' / 5'; $('.mp-empty').hidden=enabled.length>0;
+    for (const [id,unit] of units) if (!enabled.some(p=>p.id===id)) { unit.remove(); units.delete(id); }
+    enabled.forEach(pet=>{
+      const unit=units.get(pet.id)||createUnit(pet), rt=runtime(pet.id), owl=unit.querySelector('.pp-pet');
+      unit.dataset.theme=pet.theme; owl.style.transform='scale('+pet.size/100+')';
+      owl.dataset.activity=activity(pet); owl.classList.toggle('pp-waiting',pet.phase==='waiting');
+      owl.classList.toggle('pp-planning',pet.phase==='planning'); owl.classList.toggle('pp-checking',pet.phase==='checking');
+      owl.setAttribute('aria-label',pet.title+' — '+t().phase[pet.phase]+'. '+t().help);
+      owl.setAttribute('aria-expanded',String(openId===pet.id));
+      unit.querySelector('.mp-name').setAttribute('aria-label',pet.title+' — '+t().roadmap);
+      unit.querySelector('.mp-signal').hidden=!pet.question; unit.querySelector('.mp-signal').textContent='! '+t().needs;
+      unit.querySelector('.mp-dot').hidden=!rt.unread||!!pet.question;
+      renderQuota(pet,unit);
+    });
+    if (!enabled.some(p=>p.id===demoId)) demoId=enabled[0]?.id||samples[0].id;
+    demoSelect.replaceChildren(); enabled.forEach(pet=>{ const opt=el('option','',pet.title); opt.value=pet.id; demoSelect.append(opt); }); demoSelect.value=demoId;
+    const demo=store.get(demoId), available=demo&&demo.enabled;
+    demoSelect.disabled=!available;
+    $('.mp-advance').disabled=!available||demo.phase==='waiting'||store.progress(demoId).done===store.progress(demoId).total;
+    $('.mp-ask').disabled=!available||demo.phase==='waiting'; $('.mp-resolve').hidden=!available||demo.phase!=='waiting';
+    $('.mp-chicks').disabled=!available||demo.phase==='waiting';
+    renderPanel(); renderRoster(); rendering=false; place();
+  }
+  const clamp=(v,lo,hi)=>Math.max(lo,Math.min(v,Math.max(lo,hi)));
+  function place() {
+    const enabled=store.list({enabledOnly:true}), width=scene.clientWidth;
+    if (!width) return;
+    const panelHeight=panel.hidden?0:panel.offsetHeight;
+    const largest=Math.max(1,...enabled.map(pet=>pet.size/100));
+    const anyChildren=[...units.values()].some(unit=>[...unit.querySelectorAll('.pp-baby')].some(baby=>!baby.hidden));
+    const cellWidth=Math.max(180,largest*(92+(anyChildren?70:0))+28);
+    const columns=Math.max(1,Math.min(5,Math.floor(width/cellWidth))), rows=Math.ceil(enabled.length/columns);
+    const rowHeight=Math.max(220,104*largest+130), topPadding=Math.max(280,panelHeight+34);
+    const baseHeight=Math.max(440,topPadding+rowHeight*rows+12);
+    let height=baseHeight;
+    enabled.forEach((pet,index)=>{
+      const unit=units.get(pet.id); if(!unit)return;
+      const row=Math.floor(index/columns), col=index%columns, inRow=Math.min(columns,enabled.length-row*columns);
+      const scale=pet.size/100, center=(col+.5)*width/inRow;
+      const defaultY=topPadding+row*rowHeight;
+      const minY=openId===pet.id&&!panel.hidden?panelHeight+34:76;
+      const childrenVisible=[...unit.querySelectorAll('.pp-baby')].some(baby=>!baby.hidden);
+      const leftMargin=childrenVisible?Math.max(48,70*scale+12):48;
+      const left=clamp(pet.position?pet.position.x:center-46*scale,leftMargin, width-48-92*scale);
+      const top=clamp(pet.position?pet.position.y:defaultY,minY,Math.max(baseHeight-104*scale-105,minY));
+      height=Math.max(height,top+104*scale+110);
+      unit.style.left=left+'px'; unit.style.top=top+'px';
+      const name=unit.querySelector('.mp-name'); name.style.left=46*scale+'px'; name.style.top=104*scale+'px';
+      const quota=unit.querySelector('.mp-quota'); quota.style.left=46*scale+'px'; quota.style.top=(104*scale+34)+'px';
+      unit.querySelector('.mp-signal').style.left=46*scale+'px';
+      if(openId===pet.id&&!panel.hidden){
+        const panelLeft=clamp(left+46*scale-panel.offsetWidth/2,12,width-panel.offsetWidth-12);
+        panel.style.left=panelLeft+'px'; panel.style.top=(top-panelHeight-18)+'px';
+        panel.style.setProperty('--pp-tail-x',clamp(left+46*scale-panelLeft,20,panel.offsetWidth-20)+'px');
+      }
+    });
+    scene.style.height=height+'px';
+  }
+  function stopAnimations(id) {
+    const rt=runtime(id); clearTimeout(rt.magic); clearTimeout(rt.click); rt.magic=null;
+    rt.timers.forEach(timer=>clearTimeout(timer.handle)); rt.timers=[]; rt.children=[];
+  }
+  function scheduleChild(id,fn,delay) {
+    const rt=runtime(id), timer={fn,remaining:delay,due:Date.now()+delay,handle:null};
+    timer.handle=setTimeout(()=>{rt.timers=rt.timers.filter(item=>item!==timer);if(store.get(id).enabled&&root.isConnected)fn();},delay); rt.timers.push(timer);
+  }
+  function pauseChildren(id) {
+    const rt=runtime(id); rt.timers.forEach(timer=>{clearTimeout(timer.handle);timer.remaining=Math.max(0,timer.due-Date.now());timer.handle=null;});
+  }
+  function resumeChildren(id) {
+    const rt=runtime(id), timers=rt.timers.slice(); rt.timers=[]; timers.forEach(timer=>scheduleChild(id,timer.fn,timer.remaining));
+  }
+  function previewChildren(id) {
+    stopAnimations(id); render(); const unit=units.get(id), babies=[...unit.querySelectorAll('.pp-baby')];
+    babies.forEach((baby,index)=>{
+      baby.hidden=true; baby.dataset.phase='none';
+      scheduleChild(id,()=>{baby.hidden=false;baby.dataset.phase=reducedMotion.matches?'working':'hatching';place();},index*500);
+      scheduleChild(id,()=>{baby.dataset.phase='working';},index*500+900);
+      scheduleChild(id,()=>{baby.dataset.phase='leaving';if(reducedMotion.matches)baby.hidden=true;},3400+index*900);
+      scheduleChild(id,()=>{baby.hidden=true;baby.dataset.phase='none';place();},4500+index*900);
+    });
+    announce(t().sample+' · '+store.get(id).title+' · '+t().chicks);
+  }
+  $('.mp-manager').addEventListener('toggle',()=>{$('.mp-manager-body').hidden=!$('.mp-manager').open;});
+  $('.pp-close').addEventListener('click',()=>showPanel(openId));
+  $('.mp-quota-toggle').addEventListener('change',event=>{if(openId)setQuota(openId,event.target.checked);});
+  $('.mp-size').addEventListener('input',event=>{if(openId){store.setSize(openId,Number(event.target.value));render();save();}});
+  $('.mp-disable').addEventListener('click',()=>{if(openId)toggleEnabled(openId);});
+  $('.mp-open-chat').addEventListener('click',()=>{if(openId)returnToChat(openId);});
+  $('.pp-return').addEventListener('click',()=>{if(openId)returnToChat(openId);});
+  $('.pp-settings').addEventListener('toggle',place); $('.pp-road').addEventListener('toggle',place);
+  $('.mp-arrange').addEventListener('click',()=>{store.list().forEach(pet=>store.clearPosition(pet.id));place();save();});
+  demoSelect.addEventListener('change',()=>{demoId=demoSelect.value;render();});
+  $('.mp-advance').addEventListener('click',()=>{
+    if(!store.advance(demoId).ok)return;
+    const rt=runtime(demoId); clearTimeout(rt.magic); rt.unread=openId!==demoId;
+    rt.magic=setTimeout(()=>{rt.magic=null;render();},1200);
+    announce(store.get(demoId).title+' · '+store.progress(demoId).percent+'%'); render();save();
+  });
+  $('.mp-ask').addEventListener('click',()=>{
+    const question=demoId==='signup'?'When all spots are taken, close registration or open a waitlist?':'Should the first version serve individuals or teams? This changes the main flow.';
+    if(!store.ask(demoId,question).ok)return;
+    clearTimeout(runtime(demoId).magic);runtime(demoId).magic=null;pauseChildren(demoId);
+    showPanel(demoId,false); announce(t().noLive);save();
+  });
+  $('.mp-resolve').addEventListener('click',()=>{
+    if(store.resolve(demoId,'Example answer received in Codex').ok){resumeChildren(demoId);announce(t().answered);render();save();}
+  });
+  $('.mp-chicks').addEventListener('click',()=>previewChildren(demoId));
+  new ResizeObserver(place).observe(scene);
+  new ResizeObserver(place).observe(panel);
+  document.addEventListener('keydown',event=>{if(event.key==='Escape'&&openId){const previous=openId;showPanel(openId);units.get(previous)?.querySelector('.pp-pet').focus();}});
+  render();save();if(!storageAvailable)announce(t().storage);
+  if(globalThis.Tweak){
+    const tweak=new Tweak({container:root,onChange:()=>{
+      const windows={week:{remainingPercent:82,windowDurationMins:10080}};
+      if(design.quotaProfile==='dual')windows.five={remainingPercent:48,windowDurationMins:300};
+      if(design.quotaProfile==='unavailable')delete windows.week;
+      store.setQuota({windows,observedAt:'Sample data'});render();save();
+    }});
+    tweak.addSelect(design,'language',{label:'Interface language',options:[{label:'English',value:'en'},{label:'简体中文',value:'zh'}]});
+    tweak.addSelect(design,'quotaProfile',{label:'Account windows',options:[{label:'Weekly only',value:'weekly'},{label:'5h and weekly',value:'dual'},{label:'Unavailable',value:'unavailable'}]});
+  }
+})();
+
+</script>
+</div>
