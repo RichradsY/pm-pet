@@ -117,9 +117,9 @@ The display shows **remaining**, shared account quota—not consumption attribut
 
 - Five-hour and weekly windows appear only when supplied. A missing five-hour limit is not displayed as zero.
 - Hidden quota can be restored from the menu.
-- The **From chat** timestamp tells you when Codex last recorded that snapshot. Repainting does not make it fresh.
+- The line below the pills shows **remaining** quota and the snapshot's age. After five minutes, **Cached** and an asterisk mark an old figure. Repainting does not make it fresh.
 
-The default source is a recorded Codex snapshot, **not a live polling API**. There is no extra model call to calculate the displayed quota.
+Pet reads recorded general Codex usage and successful Desktop account-usage queries in an enabled conversation. Ask Codex to check your current usage limits to update it; Pet picks up the completed query and keeps Spark's separate allowance out of the general total. This is **not automatic API polling**. Aging the display does not make extra model or network calls.
 
 ## Current limits
 

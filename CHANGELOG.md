@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Update shared quota from successful Codex Desktop usage queries, including weekly-only accounts, instead of leaving an old general snapshot when token events only carry Spark limits. Preserve the actual read time and mark values older than five minutes as cached, with age that advances while idle.
 - Rename each Pet from its name or menu, with inline editing, keyboard and IME support, confirmed saves, and persistent display names independent of the Codex conversation title.
 - Show **Turn ended** from actual Codex turn events and clear that state on new input, while keeping unanswered questions and delivery progress independent.
 - Retain bounded reply metadata when replies arrive before their question shard, accept exact reply envelopes alongside other message blocks, and shorten shard discovery while waiting.

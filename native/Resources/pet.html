@@ -237,6 +237,7 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent
 #pm-pet-desktop .native-quota .pp-usage-row{width:max-content;max-width:100%;gap:6px;flex-wrap:nowrap;align-items:center;margin:0 auto;padding:3px 7px;border-radius:10px}
 #pm-pet-desktop .native-quota .pp-usage-pill{padding:0;font-size:11px;gap:5px;background:transparent;box-shadow:none}
 #pm-pet-desktop .native-quota .pp-usage-pill strong{padding:0 4px}
+#pm-pet-desktop .quota-cache-mark{font-size:8px;line-height:0;vertical-align:super;margin-left:1px;color:var(--pp-muted)}
 #pm-pet-desktop .native-quota .pp-unavailable{display:inline-flex;padding:3px 7px;font-size:11px;border-radius:10px}
 #pm-pet-desktop .native-freshness{font-size:9px;line-height:14px;color:var(--pp-muted);margin:4px 0 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #pm-pet-desktop .native-quota-close{border:0;background:transparent;color:var(--pp-muted);font-size:15px;padding:0 3px;line-height:19px;border-radius:5px}
@@ -294,7 +295,7 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent
     <span class="pp-baby" data-agent="two" data-phase="none" aria-hidden="true" hidden><span class="pp-chick"><span class="pp-chick-eyes"></span><span class="pp-chick-beak"></span><span class="pp-chick-wing"></span><span class="pp-chick-wing pp-right"></span><span class="pp-chick-feet"></span></span><span class="pp-shell pp-shell-top"></span><span class="pp-shell pp-shell-bottom"></span><span class="pp-baby-done">✓</span></span>
 </button>
 <div class="native-name"><span class="native-name-label" role="button" tabindex="0" aria-label="Rename Pet. Double-click or press Enter.">Codex conversation</span><input class="native-name-input" type="text" aria-label="Pet name" aria-describedby="pet-name-hint" autocomplete="off" spellcheck="false" dir="auto" hidden><span class="native-name-hint" id="pet-name-hint" role="status" hidden></span></div>
-<div class="native-quota" hidden><div class="pp-usage-row"></div><div class="pp-unavailable" hidden><span>Usage unavailable</span><button class="native-quota-close" aria-label="Hide usage">×</button></div><div class="native-freshness"></div></div>
+<div class="native-quota" role="group" aria-label="Remaining account quota" hidden><div class="pp-usage-row"></div><div class="pp-unavailable" hidden><span>Usage unavailable</span><button class="native-quota-close" aria-label="Hide usage">×</button></div><div class="native-freshness" id="quota-freshness"></div></div>
 </section>
 <section data-surface="panel" hidden><div class="pp-panel" role="region" aria-label="Build progress">
 <div class="pp-header"><span class="native-title"></span><div class="pp-header-right"><span class="native-phase"></span><button class="pp-close" aria-label="Hide progress">×</button></div></div>
@@ -353,10 +354,29 @@ nameInput.addEventListener('blur',saveName);
 const childSlots=Array.from(root.querySelectorAll('.pp-baby'),el=>({el,id:null,timer:null,remaining:0,startedAt:0,complete:null}));
 let childrenPaused=false;
 function text(selector,value){const el=$(selector),next=String(value??'');if(el.textContent!==next)el.textContent=next;}
-function observedDate(value){if(value===null||value===undefined||value==='')return null;const d=new Date(typeof value==='number'?(value<1e12?value*1000:value):value);return Number.isNaN(d.getTime())?null:d;}
 function dateText(value){const d=observedDate(value);return d?d.toLocaleDateString('en-GB',{month:'short',day:'numeric'})+' '+d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'';}
 function dateTooltip(value){return observedDate(value)?.toISOString()||'';}
 /* PET_STATE_START */
+function observedDate(value){if(value===null||value===undefined||value==='')return null;const d=new Date(typeof value==='number'?(value<1e12?value*1000:value):value);return Number.isNaN(d.getTime())?null:d;}
+function quotaState(q,p,now=Date.now()){
+ const windows=[];
+ for(const [key,label] of [['five','5h'],['week','Weekly']]){
+  const window=q?.windows?.[key];if(!window||!Number.isFinite(window.remainingPercent))continue;
+  const value=Math.round(Math.max(0,Math.min(100,window.remainingPercent)));
+  windows.push({key,label,value,tone:value<=20?'low':value<70?'mid':'high'});
+ }
+ const date=observedDate(q?.observedAt),timestamp=date?.getTime()??null;
+ const ageMs=timestamp!==null&&Number.isFinite(now)&&timestamp<=now?now-timestamp:null;
+ const minutes=ageMs===null?null:Math.floor(ageMs/60000);
+ const ageLabel=minutes===null?'age unknown':minutes<1?'just now':minutes<60?minutes+'m ago':minutes<1440?Math.floor(minutes/60)+'h ago':Math.floor(minutes/1440)+'d ago';
+ const stale=ageMs===null||ageMs>300000;
+ const source=String(q?.source||'');
+ const provenance=source==='codex-desktop-account'||source.includes('app-server')||source.includes('account')?'Account':source.includes('transcript')||source.includes('session')?'Chat':'Snapshot';
+ const observedAt=date?.toISOString()||null;
+ const freshness=windows.length?'Remaining · '+(stale?'Cached':provenance)+' · '+ageLabel:'Waiting for usage';
+ const tooltip=windows.length?'Remaining account quota. '+(stale?'Cached snapshot. ':'Recorded '+provenance.toLowerCase()+' snapshot. ')+(observedAt?'Observed '+observedAt+'. ':'Snapshot time unavailable. ')+'Ask Codex to check current usage.':'No quota snapshot is available. Ask Codex to check current usage.';
+ return {visible:!!p.quotaVisible,windows,stale,ageMs,ageLabel,observedAt,provenance,freshness,tooltip};
+}
 function attentionKind(p){return p.question?(p.question.kind==='input'?'input':'decision'):null;}
 function questionState(p){
  const question=p.question;if(!question)return null;
@@ -549,25 +569,40 @@ function renderChildren(p){
  const extra=active.length-represented;let more=$('.native-more');
  if(extra>0){if(!more){more=document.createElement('span');more.className='native-more';owl.append(more)}more.textContent='+'+extra;more.title=active.length+' subagents';}else more?.remove();
 }
-function quota(q,p){
- const wrap=$('.native-quota');wrap.hidden=!p.quotaVisible;if(wrap.hidden)return;
- const row=wrap.querySelector('.pp-usage-row');row.replaceChildren();
- let count=0;
- for(const [key,label] of [['five','5h'],['week','Weekly']]){
-  const window=q?.windows?.[key];if(!window||!Number.isFinite(window.remainingPercent))continue;
-  const value=Math.round(Math.max(0,Math.min(100,window.remainingPercent)));
-  const pill=document.createElement('span');pill.className='pp-usage-pill';pill.dataset.tone=value<=20?'low':value<70?'mid':'high';pill.title=label+' account quota remaining';
-  const name=document.createElement('span');name.textContent=label;
-  const strong=document.createElement('strong');strong.textContent=value+'%';pill.append(name,strong);row.append(pill);count++;
+/* PET_QUOTA_VIEW_START */
+let currentQuota=null,quotaTimer=null,quotaSignature='';
+function renderQuota(q,p){
+ const model=quotaState(q,p),wrap=$('.native-quota');wrap.hidden=!model.visible;if(wrap.hidden)return model;
+ const row=wrap.querySelector('.pp-usage-row'),signature=JSON.stringify(model.windows);
+ if(signature!==quotaSignature){
+  quotaSignature=signature;row.replaceChildren();
+  for(const entry of model.windows){
+   const pill=document.createElement('span');pill.className='pp-usage-pill';pill.dataset.tone=entry.tone;pill.setAttribute('role','img');pill.setAttribute('aria-describedby','quota-freshness');
+   const name=document.createElement('span');name.textContent=entry.label;
+   const strong=document.createElement('strong');strong.textContent=entry.value+'%';
+   const mark=document.createElement('sup');mark.className='quota-cache-mark';mark.textContent='*';mark.setAttribute('aria-hidden','true');strong.append(mark);
+   pill.append(name,strong);row.append(pill);
+  }
+  if(model.windows.length){const close=document.createElement('button');close.className='native-quota-close';close.textContent='×';close.setAttribute('aria-label','Hide usage');close.onclick=()=>send({action:'hideQuota'});row.append(close)}
  }
- row.hidden=!count;
- if(count){const close=document.createElement('button');close.className='native-quota-close';close.textContent='×';close.setAttribute('aria-label','Hide usage');close.onclick=()=>send({action:'hideQuota'});row.append(close)}
- wrap.querySelector('.pp-unavailable').hidden=count>0;
- const time=dateText(q?.observedAt);const source=String(q?.source||'');
- const from=source.includes('transcript')||source.includes('session')?'From chat':source.includes('app-server')||source.includes('account')?'Account update':source?'Cached usage':'Waiting for usage';
- wrap.querySelector('.native-freshness').textContent=from+(time?' · '+time:'');
- wrap.querySelector('.native-freshness').title=dateTooltip(q?.observedAt);
+ row.hidden=!model.windows.length;
+ row.querySelectorAll('.pp-usage-pill').forEach((pill,index)=>{
+  const entry=model.windows[index];pill.dataset.stale=String(model.stale);pill.querySelector('.quota-cache-mark').hidden=!model.stale;
+  const label=entry.label+' account quota remaining: '+entry.value+'%. '+(model.stale?'Cached snapshot, ':'Recorded snapshot, ')+model.ageLabel+'.';
+  pill.setAttribute('aria-label',label);pill.title=label+' '+model.tooltip;
+ });
+ wrap.querySelector('.pp-unavailable').hidden=model.windows.length>0;
+ text('.native-freshness',model.freshness);wrap.querySelector('.native-freshness').title=model.tooltip;
+ measure();
+ return model;
 }
+function quota(q,p){
+ currentQuota=q;
+ const model=renderQuota(q,p),needsClock=surface==='owl'&&model.visible&&model.windows.length>0;
+ if(needsClock&&quotaTimer===null)quotaTimer=setInterval(()=>{if(currentPet)renderQuota(currentQuota,currentPet);},30000);
+ else if(!needsClock&&quotaTimer!==null){clearInterval(quotaTimer);quotaTimer=null;}
+}
+/* PET_QUOTA_VIEW_END */
 let measureFrame=null,lastGlass='';
 function measure(){
  if(measureFrame!==null)return;

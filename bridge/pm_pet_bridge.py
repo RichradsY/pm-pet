@@ -206,12 +206,88 @@ def quota_snapshot(limits, observed_at):
             windows[name] = {"remainingPercent": max(0, min(100, 100 - used)),
                              "windowDurationMins": minutes}
             resets = window.get("resets_at", window.get("resetsAt"))
-            if isinstance(resets, (int, float)) and not isinstance(resets, bool):
+            if isinstance(resets, (int, float)) and not isinstance(resets, bool) and math.isfinite(resets) and resets >= 0:
                 windows[name]["resetsAt"] = resets
     if not windows:
         return None
     return {"windows": windows, "observedAt": observed_at, "source": "transcript",
             "limitId": limit_id}
+
+
+def desktop_quota_snapshot(item, observed_at):
+    """Accept only a completed, first-class Desktop account-read result.
+
+    The caller establishes exact root ownership. Do not parse shell output,
+    arbitrary tool prose, or an exec wrapper looking for quota-shaped JSON.
+    None means failure/invalid; an empty windows mapping is known-unavailable.
+    Only normalized usage is retained, never the account ID or credit balance.
+    """
+    if (not observed_at or not isinstance(item, dict)
+            or item.get("type") != "McpToolCall" or item.get("server") != "codex_app"
+            or item.get("tool") != "get_usage_limits" or item.get("status") != "completed"):
+        return None
+    result = item.get("result")
+    if not isinstance(result, dict) or result.get("isError") not in (None, False):
+        return None
+    data = result.get("structuredContent")
+    if data is None:
+        content = result.get("content")
+        if not isinstance(content, list):
+            return None
+        candidates = []
+        for block in content:
+            if not isinstance(block, dict) or block.get("type") != "text":
+                continue
+            text = block.get("text")
+            if not isinstance(text, str) or len(text) > MAX_REQUEST_BYTES:
+                continue
+            try:
+                parsed = json.loads(text)
+            except ValueError:
+                continue
+            if isinstance(parsed, dict) and ("rateLimitsByLimitId" in parsed or "rateLimits" in parsed):
+                candidates.append(parsed)
+        if len(candidates) != 1:
+            return None
+        data = candidates[0]
+    if not isinstance(data, dict) or not any(key in data for key in ("rateLimitsByLimitId", "rateLimits")):
+        return None
+    mapped = data.get("rateLimitsByLimitId")
+    if mapped is not None:
+        if not isinstance(mapped, dict):
+            return None
+        limits = mapped.get("codex")
+        if "codex" in mapped and not isinstance(limits, dict):
+            return None
+    else:
+        if "rateLimits" not in data:
+            return None
+        limits = data["rateLimits"]
+        if limits is not None and not isinstance(limits, dict):
+            return None
+        if limits and limits.get("limitId") not in (None, "codex"):
+            limits = None
+    snapshot = {"windows": {}, "observedAt": observed_at,
+                "source": "codex-desktop-account", "limitId": "codex"}
+    if limits is None:
+        return snapshot
+    if limits.get("limitId") not in (None, "codex") or not any(key in limits for key in ("primary", "secondary")):
+        return None
+    for slot in ("primary", "secondary"):
+        window = limits.get(slot)
+        if window is None:
+            continue
+        if not isinstance(window, dict):
+            return None
+        minutes, used = window.get("windowDurationMins"), window.get("usedPercent")
+        if (isinstance(minutes, bool) or not isinstance(minutes, (int, float))
+                or not math.isfinite(minutes) or minutes <= 0 or int(minutes) != minutes
+                or isinstance(used, bool) or not isinstance(used, (int, float)) or not math.isfinite(used)):
+            return None
+    normalized = quota_snapshot(limits, observed_at)
+    if normalized:
+        snapshot["windows"] = normalized["windows"]
+    return snapshot
 
 
 class Bridge:
@@ -248,6 +324,15 @@ class Bridge:
         if self.changed:
             self.state["revision"] += 1
             self.persist()
+
+    def observe_quota(self, pet, snapshot):
+        if snapshot is None:
+            return
+        previous = timestamp(self.state["quota"].get("observedAt"))
+        if not previous or snapshot["observedAt"] > previous:
+            snapshot["sourceConversationId"] = pet["id"]
+            self.state["quota"] = snapshot
+            self.changed = True
 
     def pet(self, conversation_id):
         return next((pet for pet in self.state["pets"] if pet["id"] == conversation_id), None)
@@ -974,16 +1059,12 @@ class Bridge:
             if not self.observe_turn_state(pet, event_type, payload, observed):
                 return
         if event_type == "token_count":
-            quota = quota_snapshot(payload.get("rate_limits"), observed)
-            if quota:
-                quota["sourceConversationId"] = pet["id"]
-            previous = timestamp(self.state["quota"].get("observedAt"))
-            if quota and (not previous or quota["observedAt"] > previous):
-                self.state["quota"] = quota
-                self.changed = True
+            self.observe_quota(pet, quota_snapshot(payload.get("rate_limits"), observed))
             return
         if event_type == "item_completed":
             item = payload.get("item") or {}
+            if event_owner == pet["id"]:
+                self.observe_quota(pet, desktop_quota_snapshot(item, observed))
             if isinstance(item, dict) and item.get("type") == "UserMessage":
                 # Only a first-class user item explicitly owned by this root binding qualifies.
                 # No message content, quoted tool output, or child message is interpreted.

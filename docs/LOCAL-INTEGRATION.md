@@ -47,10 +47,12 @@ python3 scripts/pm-pet.py doctor
 | Required information | Explicit red input reminder with its original Codex/system/terminal destination; no password field or automatic OS-prompt detection |
 | Question resolution | Automatic questions require matching replies to every item, then main-agent resolution with a full reviewed roadmap; explicit prompts require owner verification and matching resolution ID |
 | Child activity | Observed start/completion events; repeated interaction alone is not proof of a resumed child |
-| Account quota | Recorded general `codex` snapshot from a bound conversation, with source timestamp; missing 5h remains absent |
+| Account quota | General `codex` snapshots and completed Desktop `get_usage_limits` results from an enabled bound conversation, with source timestamp; missing 5h remains absent |
 | Feedback wait | Persistent question/report gate plus an agent stop-before-asking workflow; optional trusted local-tool hook adds a guard. This observer cannot cancel already-running work |
 
-The default quota source is a cached observation. Reading the transcript again does not make the quota fresh. General account windows are kept separate from model-specific quota buckets.
+Quota is observed through the bound transcript, not an automatic polling API. Reading the transcript again does not make the quota fresh. General account windows are kept separate from model-specific quota buckets. A successful first-class `codex_app/get_usage_limits` completion updates the shared snapshot using that event's timestamp and the `rateLimitsByLimitId.codex` bucket; a missing/null map falls back to the legacy general bucket. Ask Codex to check current usage in an enabled task to get a fresh account read. Shell output and quoted JSON are not accepted as usage events. Account IDs, credit balances, and raw tool responses are not copied into Pet state.
+
+A valid response with no supported general windows clears the old display to unavailable. A failed or malformed response retains the last good snapshot and its original time. After five minutes, the UI marks old numbers as cached; its age advances locally even when the build is idle. This fixes stale general usage when the transcript only emits newer model-specific token-count events.
 
 An optional live diagnostic is available:
 

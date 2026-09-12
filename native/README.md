@@ -34,7 +34,7 @@ Double-clicking the name (beneath the owl or in the progress header) opens an in
 
 Before allowing a retry after a save timeout, the native app removes its exact queued request or confirms that file is absent. Other removal errors leave the save pending. The bridge's single-consumer lock and serial inbox processing ensure a previously read request completes before a retry is processed, so an old name cannot overwrite a newer retry. The UI still calls a timed-out save **unconfirmed**, since removing the request cannot prove whether it was already applied.
 
-No quota values or progress metrics are seeded by the native UI. Missing five-hour quota remains absent. Missing quota is shown as unavailable when its display is enabled. Cached transcript quota keeps its actual observation timestamp and is labeled “From chat”.
+No quota values or progress metrics are seeded by the native UI. Missing five-hour quota remains absent. Missing quota is shown as unavailable when its display is enabled. Quota retains its actual observation timestamp and shows its source and relative age outside the glass pill. Values older than five minutes are marked cached with an asterisk; aging runs locally while visible and does not fetch data. A completed Desktop account-usage query can provide a newer snapshot through the bridge.
 
 The owl silhouette has no pale outer stroke or full-window backing. Rounded `NSVisualEffectView` islands sit below transparent WebKit only where the name, quota, attention badge, or progress panel is visible. The renderer reports bounded local rectangles with `glassRegions`; those messages never reach the conversation bridge. Materials follow the system appearance, with an opaque system-color fallback when Reduce Transparency is enabled.
 
