@@ -60,3 +60,13 @@ For the supported `request_user_input_async` format, ask in Codex without creati
 - Restart and disable/re-enable preserve unresolved questions; completed call IDs are retained as replay protection. First adoption starts observing new input calls rather than reopening all historical questions.
 
 Follow the [feedback gate workflow](../../../../docs/FEEDBACK-GATE.md) for stopping child tasks and waiting. This report contract blocks progress updates while unresolved; it does not by itself interrupt runtime execution. Asynchronous delivery acknowledgements, timeout, and turn completion never resolve a question.
+
+## Explicit cancellation and optional setup
+
+The main agent can honor a user's explicit cancellation, deferral, or superseding request without manufacturing a question-card answer. Send `cancelQuestionId`, `cancellationReason` (`setup_deferred`, `user_cancelled`, or `superseded`), and `sourceUserMessageId` with the full reviewed `steps` and `currentStep`. The source ID must match the latest observed root user request and follow the original question. `cancelQuestionId` and `resolveQuestionId` are mutually exclusive. Keep the current generation and increasing sequence protections.
+
+To label optional setup, include `purpose: "setup", optional: true` on a manual question, or report `classifyQuestion: {id, purpose: "setup", optional: true}` for the exact current question. Classification changes metadata only; it does not clear the wait. It can accompany an explicitly requested setup deferral in one transaction.
+
+Pet offers **Not now** only for that optional setup. Its scoped `defer_setup` action checks the current binding generation and question ID. The bridge records a cancelled/deferred outcome and marks the roadmap for review. It does not grant a tool permission, mark a hook trusted, or send a continuation prompt. The main agent must review the deferred work before resuming, and other pending questions stay pending.
+
+Cancelled question calls retain replay protection; a late reply cannot revive them. The original question card may remain in Codex because this local adapter does not own Codex's card lifecycle. Do not ask a duplicate question to clear it.

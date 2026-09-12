@@ -1,6 +1,7 @@
 """Question correlation fixtures are synthetic; never save real answers."""
 
 import json
+import copy
 from pathlib import Path
 import tempfile
 import unittest
@@ -46,6 +47,10 @@ class DecisionTests(unittest.TestCase):
         for event in events:
             self.bridge.apply_event(self.pet, event)
         self.bridge.publish()
+
+    def user_message(self, seconds=3, message_id="latest-user-message", owner=None):
+        return {"timestamp": self.at(seconds), "type": "event_msg", "payload": {"type": "item_completed", "thread_id": owner or self.conversation,
+                "item": {"type": "UserMessage", "id": message_id, "client_id": str(uuid.uuid4()), "content": [{"type": "text", "text": "Synthetic user direction."}]}}}
 
     def report(self, values, seconds=20):
         payload = {"generation": self.pet["generation"], "sequence": self.pet["lastReportSequence"] + 1}
@@ -216,6 +221,169 @@ class DecisionTests(unittest.TestCase):
         self.assertEqual(len(self.pet["inputCallHistory"]), 1)
         self.observe(self.call("call_0", 1))
         self.assertIsNone(self.pet["question"])
+
+    def test_explicit_setup_deferral_cancels_unanswered_call_without_approval(self):
+        self.observe(self.call(), self.user_message())
+        self.report(self.reviewed(cancelQuestionId="input:call_questionA", cancellationReason="setup_deferred",
+                                 sourceUserMessageId="latest-user-message", classifyQuestion={"id": "input:call_questionA", "purpose": "setup", "optional": True}))
+        self.assertIsNone(self.pet["question"])
+        outcome = self.pet["inputCallHistory"]["call_questionA"]
+        self.assertEqual(outcome["status"], "cancelled")
+        self.assertEqual(outcome["cancellationReason"], "setup_deferred")
+        self.assertEqual(outcome["answeredCount"], 0)
+        self.assertNotIn("approved", outcome)
+        self.assertNotIn("items", outcome)
+        self.assertEqual(outcome["sourceUserMessageId"], "latest-user-message")
+
+    def test_cancellation_requires_latest_later_root_user_message_and_full_review(self):
+        self.observe(self.call(), self.user_message(seconds=0, message_id="before-question"))
+        with self.assertRaisesRegex(MODULE.BridgeError, "latest root user message"):
+            self.report(self.reviewed(cancelQuestionId="input:call_questionA", cancellationReason="user_cancelled", sourceUserMessageId="before-question"))
+        self.observe(self.user_message(seconds=3), self.user_message(seconds=4, message_id="child-message", owner=str(uuid.uuid4())))
+        for supplied in (None, "wrong", "child-message"):
+            with self.assertRaises(MODULE.BridgeError):
+                self.report(self.reviewed(cancelQuestionId="input:call_questionA", cancellationReason="user_cancelled", sourceUserMessageId=supplied))
+        with self.assertRaisesRegex(MODULE.BridgeError, "complete roadmap"):
+            self.report({"cancelQuestionId": "input:call_questionA", "cancellationReason": "user_cancelled", "sourceUserMessageId": "latest-user-message"})
+        self.observe(self.user_message(seconds=5, message_id="newest"))
+        with self.assertRaises(MODULE.BridgeError):
+            self.report(self.reviewed(cancelQuestionId="input:call_questionA", cancellationReason="user_cancelled", sourceUserMessageId="latest-user-message"))
+        self.assertEqual(self.pet["question"]["status"], "awaiting_reply")
+
+    def test_setup_is_never_inferred_from_question_text(self):
+        self.observe(self.call(titles=["Install optional Hook setup?"]), self.user_message())
+        with self.assertRaisesRegex(MODULE.BridgeError, "explicitly optional setup"):
+            self.report(self.reviewed(cancelQuestionId="input:call_questionA", cancellationReason="setup_deferred", sourceUserMessageId="latest-user-message"))
+        self.assertNotIn("purpose", self.pet["question"])
+        with self.assertRaises(MODULE.BridgeError):
+            self.report({"classifyQuestion": {"id": "input:call_wrong", "purpose": "setup", "optional": True}})
+
+    def test_cancel_and_resolve_are_mutually_exclusive(self):
+        self.observe(self.call(), self.user_message())
+        with self.assertRaisesRegex(MODULE.BridgeError, "not both"):
+            self.report(self.reviewed(cancelQuestionId="input:call_questionA", resolveQuestionId="input:call_questionA",
+                                     cancellationReason="user_cancelled", sourceUserMessageId="latest-user-message"))
+        self.assertEqual(self.pet["inputCallHistory"]["call_questionA"]["status"], "awaiting_reply")
+
+    def test_pet_not_now_checks_generation_current_id_and_optional_setup(self):
+        self.observe(self.call())
+        request = {"action": "defer_setup", "id": self.conversation, "generation": self.pet["generation"], "questionId": "input:call_questionA"}
+        with self.assertRaises(MODULE.BridgeError):
+            self.bridge.handle(request)
+        self.report({"classifyQuestion": {"id": "input:call_questionA", "purpose": "setup", "optional": True}})
+        with self.assertRaises(MODULE.BridgeError):
+            self.bridge.handle(dict(request, generation=self.pet["generation"] - 1))
+        with self.assertRaises(MODULE.BridgeError):
+            self.bridge.handle(dict(request, questionId="input:call_wrong"))
+        self.bridge.handle(request)
+        self.assertIsNone(self.pet["question"])
+        self.assertEqual(self.pet["phase"], "planning")
+        self.assertTrue(self.pet["roadmapNeedsUpdate"])
+        self.assertEqual(self.pet["inputCallHistory"]["call_questionA"]["source"], "pet")
+        self.assertFalse(self.bridge.state["capabilities"]["executionControl"])
+
+    def test_deferred_question_stays_cancelled_after_restart_and_late_reply(self):
+        self.observe(self.call(), self.user_message())
+        self.report(self.reviewed(cancelQuestionId="input:call_questionA", cancellationReason="user_cancelled", sourceUserMessageId="latest-user-message"))
+        self.bridge = MODULE.Bridge(self.root / "runtime", self.sessions)
+        self.pet = self.bridge.pet(self.conversation)
+        self.observe(self.call(seconds=25), self.reply(seconds=26))
+        self.assertIsNone(self.pet["question"])
+        self.assertEqual(self.pet["inputCallHistory"]["call_questionA"]["status"], "cancelled")
+        self.assertFalse(self.pet["roadmapNeedsUpdate"])
+
+    def test_deferring_current_setup_keeps_next_question_waiting(self):
+        self.observe(self.call(), self.call(call_id="call_questionB", seconds=2))
+        self.report({"classifyQuestion": {"id": "input:call_questionA", "purpose": "setup", "optional": True}})
+        self.bridge.handle({"action": "defer_setup", "id": self.conversation, "generation": self.pet["generation"], "questionId": "input:call_questionA"})
+        self.assertEqual(self.pet["question"]["callId"], "call_questionB")
+        self.assertEqual(self.pet["phase"], "waiting")
+        self.assertTrue(self.pet["roadmapNeedsUpdate"])
+
+    def test_manual_optional_setup_supports_not_now(self):
+        self.report({"question": {"id": "manual-setup", "text": "Optional local setup", "purpose": "setup", "optional": True}})
+        self.bridge.handle({"action": "defer_setup", "id": self.conversation, "generation": self.pet["generation"], "questionId": "manual-setup"})
+        self.assertIsNone(self.pet["question"])
+        self.assertEqual(self.pet["questionOutcomes"]["manual-setup"]["status"], "cancelled")
+        self.assertEqual(self.pet["questionOutcomes"]["manual-setup"]["cancellationReason"], "setup_deferred")
+
+    @staticmethod
+    def serialized_bytes(value):
+        # Match atomic_json, including its final newline and UTF-8 encoding.
+        return len(json.dumps(value, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode("utf-8")) + 1
+
+    def large_question_fixture(self):
+        for _ in range(4):
+            conversation = str(uuid.uuid4())
+            path = self.sessions / ("rollout-" + conversation + ".jsonl")
+            path.write_text(json.dumps({"type": "session_meta", "payload": {"id": conversation, "source": "vscode"}}) + "\n")
+            with mock.patch.object(MODULE, "now_iso", return_value=self.at(0)):
+                self.bridge.handle({"action": "enable", "id": conversation})
+        events = []
+        for pet_index, pet in enumerate(self.bridge.state["pets"]):
+            for call_index in range(4):
+                events.append((pet["id"], self.call("call_bulk_%d_%d" % (pet_index, call_index),
+                                                   seconds=pet_index * 4 + call_index + 1, titles=["示" * 1200] * 32)))
+        return events
+
+    def test_global_utf8_question_budget_prevents_native_four_mib_overflow(self):
+        events = self.large_question_fixture()
+        legacy = MODULE.Bridge(self.root / "legacy", self.sessions)
+        legacy.state = copy.deepcopy(self.bridge.state)
+        with mock.patch.object(MODULE, "MAX_QUESTION_STATE_BYTES", 16 * 1024 * 1024):
+            for pet_id, event in events:
+                legacy.apply_event(legacy.pet(pet_id), event)
+        self.assertGreater(self.serialized_bytes(legacy.state), 4 * 1024 * 1024)
+        for pet_id, event in events:
+            self.bridge.apply_event(self.bridge.pet(pet_id), event)
+        self.assertLess(self.serialized_bytes(self.bridge.state), 4 * 1024 * 1024)
+        ack = {"requestId": str(uuid.uuid4()), "ok": True, "state": self.bridge.state}
+        self.assertLess(self.serialized_bytes(ack), 4 * 1024 * 1024)
+        overflowed = [pet for pet in self.bridge.state["pets"] if pet.get("questionOverflow")]
+        self.assertTrue(overflowed)
+        self.assertTrue(all(pet["questionOverflow"]["reason"] == "state_payload_budget" for pet in overflowed))
+        for pet in self.bridge.state["pets"]:
+            self.assertEqual(pet["phase"], "waiting")
+            for call in pet["inputCallHistory"].values():
+                self.assertEqual(call["status"], "awaiting_reply")
+                self.assertEqual(len(call["items"]), 32)
+                self.assertFalse(any(item["answered"] for item in call["items"]))
+
+    def test_budget_rejection_stays_recorded_after_reconciliation_restart_and_replay(self):
+        with mock.patch.object(MODULE, "MAX_QUESTION_STATE_BYTES", 1):
+            self.observe(self.call())
+        self.assertEqual(self.pet["question"]["status"], "needs_reconciliation")
+        self.report(self.reviewed(resolveQuestionId="input-queue-overflow"))
+        self.bridge = MODULE.Bridge(self.root / "runtime", self.sessions)
+        self.pet = self.bridge.pet(self.conversation)
+        self.observe(self.call(), self.reply(seconds=25))
+        self.assertIsNone(self.pet["question"])
+        self.assertEqual(self.pet["inputCallHistory"], {})
+        self.assertEqual(set(self.pet["inputOverflowHistory"]["call_questionA"]), {"callId", "observedAt", "reason"})
+        self.assertEqual(self.pet["phase"], "building")
+
+    def test_pruned_overflow_identity_keeps_a_replay_watermark(self):
+        with mock.patch.object(MODULE, "MAX_QUESTION_STATE_BYTES", 1), mock.patch.object(MODULE, "MAX_INPUT_TOMBSTONES", 1):
+            self.observe(self.call("call_first", 1), self.call("call_second", 2))
+        self.assertEqual(len(self.pet["inputOverflowHistory"]), 1)
+        self.report(self.reviewed(resolveQuestionId="input-queue-overflow"))
+        self.observe(self.call("call_first", 1))
+        self.assertIsNone(self.pet["question"])
+
+    def test_existing_oversize_state_is_preserved_instead_of_silent_migration(self):
+        events = self.large_question_fixture()
+        with mock.patch.object(MODULE, "MAX_QUESTION_STATE_BYTES", 16 * 1024 * 1024):
+            for pet_id, event in events:
+                self.bridge.apply_event(self.bridge.pet(pet_id), event)
+        self.bridge.publish()
+        self.assertGreater(self.serialized_bytes(self.bridge.state), 4 * 1024 * 1024)
+        original_calls = sum(len(pet["inputCallHistory"]) for pet in self.bridge.state["pets"])
+        restarted = MODULE.Bridge(self.root / "runtime", self.sessions)
+        pet = restarted.pet(self.conversation)
+        restarted.apply_event(pet, self.call("call_after_restart", 25))
+        self.assertEqual(sum(len(item["inputCallHistory"]) for item in restarted.state["pets"]), original_calls)
+        self.assertEqual(pet["questionOverflow"]["reason"], "state_payload_budget")
+        self.assertGreater(self.serialized_bytes(restarted.state), 4 * 1024 * 1024)
 
 
 if __name__ == "__main__":

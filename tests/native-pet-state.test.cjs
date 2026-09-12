@@ -13,7 +13,7 @@ assert.equal(html.split(start).length, 2, 'Native view must expose one state blo
 assert.equal(html.split(end).length, 2, 'Native view must expose one state block');
 const source = html.split(start)[1].split(end)[0];
 const state = vm.runInNewContext(
-  `${source}\n({ attentionKind, questionState, completedTransitions, roadmapState, compactRoadmap })`,
+  `${source}\n({ attentionKind, questionState, setupDeferRequest, setupDeferralState, completedTransitions, roadmapState, compactRoadmap })`,
   {},
   { filename: 'native/Resources/pet.html:PET_STATE', timeout: 1000 }
 );
@@ -358,4 +358,127 @@ test('reviewing a reply without pending delivery work has one review marker and 
     assert.equal(result.visible[0].index, undefined);
     assert.equal(model(snapshot).all.filter(item => item.status === 'current').length, 0);
   }
+});
+
+const optionalSetup = overrides => pet({ question: {
+  id: 'optional-setup', text: 'Configure the optional helper?', kind: 'decision',
+  purpose: 'setup', optional: true, status: 'awaiting_reply', ...overrides
+} });
+const deferRequest = snapshot => plain(state.setupDeferRequest(snapshot));
+const deferState = (previous, event) => plain(state.setupDeferralState(previous, event));
+const beginDefer = (snapshot = optionalSetup(), token = 'attempt-a') => deferState(null, { type: 'start', pet: snapshot, token });
+
+test('only explicitly optional setup gets Not now, while ordinary questions stay unchanged', () => {
+  const result = questionModel(optionalSetup());
+  assert.equal(result.setup, true);
+  assert.equal(result.optionalSetup, true);
+  assert.equal(result.canDefer, true);
+  assert.equal(result.action, 'open_codex');
+  for (const override of [{ purpose: 'product' }, { purpose: undefined }, { optional: false }, { optional: undefined }, { optional: 'true' }]) {
+    assert.equal(questionModel(optionalSetup(override)).canDefer, false);
+    assert.equal(deferRequest(optionalSetup(override)), null);
+  }
+  assert.equal(questionModel(pet({ question: { id: 'ordinary', text: 'Choose a feature' } })).action, 'answer');
+});
+
+test('deferral requests identify the current question and binding without approving anything', () => {
+  const snapshot = optionalSetup();
+  const before = JSON.stringify(snapshot);
+  assert.deepEqual(deferRequest(snapshot), {
+    action: 'deferSetup', questionId: 'optional-setup', generation: 1
+  });
+  assert.equal(JSON.stringify(snapshot), before);
+  for (const generation of [undefined, null, -1, '1', 1.5]) assert.equal(deferRequest({ ...snapshot, generation }), null);
+  assert.equal(deferRequest(optionalSetup({ id: '' })), null);
+});
+
+test('reviewing an optional setup reply still waits for review and cannot be deferred again', () => {
+  const result = questionModel(optionalSetup({ status: 'awaiting_review' }));
+  assert.equal(result.reviewing, true);
+  assert.equal(result.canDefer, false);
+  assert.equal(result.action, 'open_codex');
+  assert.equal(deferRequest(optionalSetup({ status: 'awaiting_review' })), null);
+});
+
+test('a pending setup deferral ignores repeated clicks and mismatched acknowledgments', () => {
+  const pending = beginDefer();
+  assert.equal(pending.status, 'pending');
+  assert.deepEqual(deferState(pending, { type: 'start', pet: optionalSetup(), token: 'duplicate-click' }), pending);
+  for (const patch of [{ token: 'old-attempt' }, { questionId: 'another-question' }, { generation: 2 }]) {
+    assert.deepEqual(deferState(pending, { type: 'finish', token: pending.token, questionId: pending.questionId, generation: pending.generation, ok: true, ...patch }), pending);
+  }
+});
+
+test('failed setup deferral can retry and a late earlier acknowledgment cannot finish the retry', () => {
+  const pending = beginDefer();
+  const failed = deferState(pending, { type: 'finish', token: pending.token, questionId: pending.questionId, generation: pending.generation, ok: false });
+  assert.equal(failed.status, 'failed');
+  assert.match(failed.error, /defer setup/i);
+  assert.doesNotMatch(failed.error, /save.*name/i);
+  const retry = deferState(failed, { type: 'start', pet: optionalSetup(), token: 'attempt-b' });
+  assert.equal(retry.status, 'pending');
+  assert.equal(retry.error, null);
+  assert.deepEqual(deferState(retry, { type: 'finish', token: pending.token, questionId: pending.questionId, generation: pending.generation, ok: true }), retry);
+});
+
+test('both missing acknowledgment and missing state readback restore the setup action after timeout', () => {
+  const pending = beginDefer();
+  const confirmed = deferState(pending, { type: 'finish', token: pending.token, questionId: pending.questionId, generation: pending.generation, ok: true });
+  assert.equal(confirmed.status, 'confirmed');
+  for (const waiting of [pending, confirmed]) {
+    const expired = deferState(waiting, { type: 'timeout', token: waiting.token });
+    assert.equal(expired.status, 'unconfirmed');
+    assert.match(expired.error, /unconfirmed/);
+    assert.equal(deferState(expired, { type: 'start', pet: optionalSetup(), token: 'retry' }).status, 'pending');
+  }
+});
+
+test('deferral UI clears on a changed question or binding without touching unrelated questions', () => {
+  const pending = beginDefer();
+  for (const snapshot of [pet(), optionalSetup({ id: 'new-question' }), optionalSetup({ optional: false }), { ...optionalSetup(), generation: 2 }]) {
+    assert.equal(deferState(pending, { type: 'sync', pet: snapshot }), null);
+  }
+  assert.deepEqual(deferState(pending, { type: 'sync', pet: optionalSetup() }), pending);
+});
+
+test('confirmed setup deferral waits for authoritative roadmap review rather than completing work', () => {
+  const snapshot = optionalSetup();
+  const before = JSON.stringify(snapshot);
+  const pending = beginDefer(snapshot);
+  const confirmed = deferState(pending, { type: 'finish', token: pending.token, questionId: pending.questionId, generation: pending.generation, ok: true });
+  assert.equal(JSON.stringify(snapshot), before);
+  assert.equal(questionModel(snapshot).canDefer, true, 'Acknowledgment alone does not rewrite the snapshot');
+  const bridgeUpdate = { ...snapshot, question: null, roadmapNeedsUpdate: true };
+  assert.equal(deferState(confirmed, { type: 'sync', pet: bridgeUpdate }), null);
+  assert.deepEqual(model(bridgeUpdate).all.map(item => item.status), ['done', 'pending', 'pending']);
+  assert.deepEqual(transitions(snapshot, bridgeUpdate), []);
+});
+
+
+test('native ack timeout reports an unconfirmed attempt, permits retry, and accepts authoritative readback', () => {
+  const snapshot = optionalSetup();
+  const pending = beginDefer(snapshot);
+  // This is the native eight-second ack callback, not the JS watchdog timer.
+  const callback = { type: 'finish', token: pending.token, questionId: pending.questionId,
+    generation: pending.generation, outcome: 'unconfirmed', ok: false };
+  const uncertain = deferState(pending, callback);
+  assert.equal(uncertain.status, 'unconfirmed');
+  assert.match(uncertain.error, /unconfirmed/i);
+  assert.doesNotMatch(uncertain.error, /could not defer|failed|save.*name/i);
+  assert.equal(deferState(uncertain, { type: 'sync', pet: snapshot }).status, 'unconfirmed');
+  const retry = deferState(uncertain, { type: 'start', pet: snapshot, token: 'retry-after-native-timeout' });
+  assert.equal(retry.status, 'pending');
+  assert.notEqual(retry.token, pending.token);
+  const eventualBridgeState = { ...snapshot, question: null, roadmapNeedsUpdate: true };
+  assert.equal(deferState(uncertain, { type: 'sync', pet: eventualBridgeState }), null);
+  assert.equal(deferState(retry, { type: 'sync', pet: eventualBridgeState }), null);
+  assert.deepEqual(eventualBridgeState.steps, snapshot.steps);
+});
+
+test('a definite native rejection remains distinct from timeout uncertainty', () => {
+  const pending = beginDefer();
+  const result = deferState(pending, { type: 'finish', token: pending.token,
+    questionId: pending.questionId, generation: pending.generation, outcome: 'failed' });
+  assert.equal(result.status, 'failed');
+  assert.match(result.error, /Could not defer setup/);
 });

@@ -43,6 +43,16 @@ The adapter enforces its progress/report gate but cannot cancel the model, alrea
 
 Disable, quit, tool cleanup, silence, and a finished turn are not answers. The user explicitly requested waiting until feedback, so this workflow must not be replaced by continuing independent build work after a blocking question.
 
+### Recovery and optional setup
+
+Honor a user's explicit instruction to cancel, defer optional setup, supersede an old requirement, or repair a stuck waiting mechanism. That instruction authorizes the necessary recovery work; do not insist that the user answer an obsolete or broken question card first. A status-only message is not cancellation.
+
+Use `cancelQuestionId` with the exact active ID, `cancellationReason`, the actual latest `sourceUserMessageId`, and the full reviewed roadmap. Cancellation is distinct from a correlated answer: it does not mark the hook trusted, a tool approved, or the original work completed. Remove or defer dependent work explicitly. Continue only after the returned state has no remaining blocking question.
+
+For optional integration setup, set `purpose: "setup", optional: true` on an explicit question. An observed question can be classified with `classifyQuestion: {id, purpose: "setup", optional: true}`; never infer this from keywords. Pet offers **Not now** only for explicitly optional setup. A user click defers that setup and requests roadmap review; it does not send a model prompt or resume execution itself. Keep the optional capability disabled until actual activation is verified.
+
+Hook installation is optional to the reminder UX. If the user defers it, continue with the established agent waiting workflow and clearly retain the missing runtime-control capability. Do not keep the entire Pet stuck on an installation question.
+
 ## Current integration limits
 
 This is a developer integration, not an installed or notarized consumer app. The launcher can build locally on a Mac with developer tools. Installing this skill is separate; do not edit Codex configuration or global skill folders without the user's request.

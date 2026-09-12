@@ -191,6 +191,31 @@ class GateHookTests(unittest.TestCase):
         self.pending("awaiting_review")
         self.assertEqual(self.evaluate(self.report_event()), {})
 
+    def test_explicit_user_cancellation_can_reach_bridge_without_claiming_an_answer(self):
+        self.pending()
+        self.pet['requestMessageId'] = 'user-recovery-request'
+        self.save()
+        report = self.report()
+        report.pop('resolveQuestionId')
+        report.update(cancelQuestionId='q-one', cancellationReason='setup_deferred',
+                      sourceUserMessageId='user-recovery-request')
+        self.assertEqual(self.evaluate(self.report_event(report)), {})
+        for key, value in [('cancelQuestionId', 'wrong'), ('sourceUserMessageId', 'old-request'),
+                           ('cancellationReason', 'timeout'), ('steps', None), ('currentStep', '')]:
+            wrong = dict(report, **{key: value})
+            self.deny(self.report_event(wrong))
+        self.deny(self.report_event(dict(report, resolveQuestionId='q-one')))
+        self.assertEqual(self.pet['question']['status'], 'awaiting_reply')
+
+    def test_setup_classification_only_changes_metadata_not_progress(self):
+        self.pending()
+        report = {'generation': 3, 'sequence': 10,
+                  'classifyQuestion': {'id': 'q-one', 'purpose': 'setup', 'optional': True}}
+        self.assertEqual(self.evaluate(self.report_event(report)), {})
+        self.deny(self.report_event(dict(report, phase='building')))
+        self.deny(self.report_event(dict(report, steps=[])))
+        self.deny(self.report_event(dict(report, classifyQuestion={'id': 'wrong', 'purpose': 'setup', 'optional': True})))
+
     def test_report_file_path_must_be_absolute_and_existing(self):
         self.pending("awaiting_review")
         path = self.home / "review.json"

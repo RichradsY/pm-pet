@@ -29,6 +29,10 @@ struct LaunchOptions {
     }
 }
 
+enum SetupDeferralOutcome: String {
+    case confirmed, failed, unconfirmed
+}
+
 final class PetPanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
@@ -238,6 +242,7 @@ final class PetWindowController {
     private var appliedPosition: NSPoint?
     private var lastQuestionID: String?
     private var panelHeight: CGFloat = 280
+    var requestSetupDeferral: (([String: Any], @escaping (SetupDeferralOutcome) -> Void) -> Void)?
     private let send: ([String: Any]) -> Void
     var didRender: (() -> Void)? {
         didSet {
@@ -336,6 +341,12 @@ final class PetWindowController {
 
     func disable() { send(["action": "disable", "id": id]) }
 
+    private func setupDeferResult(questionID: String, generation: Int, requestToken: String, outcome: SetupDeferralOutcome) {
+        let result: [String: Any] = ["ok": outcome == .confirmed, "outcome": outcome.rawValue, "questionId": questionID, "generation": generation, "requestToken": requestToken]
+        guard let data = try? JSONSerialization.data(withJSONObject: result), let json = String(data: data, encoding: .utf8) else { return }
+        panel.webView.evaluateJavaScript("window.finishSetupDefer(\(json))", completionHandler: nil)
+    }
+
     func menu() -> NSMenu {
         let menu = NSMenu()
         let header = NSMenuItem(title: title, action: nil, keyEquivalent: "")
@@ -362,6 +373,26 @@ final class PetWindowController {
     private func handle(_ body: [String: Any]) {
         guard let action = body["action"] as? String else { return }
         switch action {
+        case "deferSetup":
+            guard let questionID = body["questionId"] as? String,
+                  let generation = body["generation"] as? Int,
+                  let requestToken = body["requestToken"] as? String else { return }
+            guard let question = pet["question"] as? [String: Any],
+                  question["id"] as? String == questionID,
+                  pet["generation"] as? Int == generation,
+                  question["purpose"] as? String == "setup",
+                  question["optional"] as? Bool == true,
+                  question["status"] as? String != "awaiting_review" else {
+                setupDeferResult(questionID: questionID, generation: generation, requestToken: requestToken, outcome: .failed)
+                return
+            }
+            guard let requestSetupDeferral = requestSetupDeferral else {
+                setupDeferResult(questionID: questionID, generation: generation, requestToken: requestToken, outcome: .failed)
+                return
+            }
+            requestSetupDeferral(["action": "defer_setup", "id": id, "questionId": questionID, "generation": generation], { [weak self] outcome in
+                self?.setupDeferResult(questionID: questionID, generation: generation, requestToken: requestToken, outcome: outcome)
+            })
         case "togglePanel": showPanel(!panelVisible, focus: true)
         case "hidePanel": showPanel(false)
         case "openConversation": openConversation()
@@ -433,6 +464,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var terminationSignal: DispatchSourceSignal?
     private var lastHeartbeat = Date.distantPast
     private var quitRequestID: String?
+    private var pendingSetupDeferrals: [String: (deadline: Date, completion: (SetupDeferralOutcome) -> Void)] = [:]
 
     init(options: LaunchOptions) { self.options = options }
 
@@ -517,6 +549,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 let themeSlot = ["sage", "sky", "lilac", "rose", "sand"].firstIndex(of: pet["theme"] as? String ?? "") ?? index
                 controllers[id] = PetWindowController(id: id, index: themeSlot) { [weak self] command in self?.send(command) }
                 controllers[id]?.didRender = { [weak self] in self?.publishNativeStatus() }
+                controllers[id]?.requestSetupDeferral = { [weak self] command, completion in
+                    guard let self = self else { completion(.failed); return }
+                    self.sendSetupDeferral(command, completion: completion)
+                }
             }
             controllers[id]?.update(pet: pet, state: state)
         }
@@ -537,6 +573,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
         reloadState()
+        checkPendingSetupDeferrals()
         if Date().timeIntervalSince(lastHeartbeat) >= 1 { publishNativeStatus() }
     }
 
@@ -561,6 +598,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let requestID = quitRequestID { status["quitRequestId"] = requestID }
         if let data = try? JSONSerialization.data(withJSONObject: status, options: [.sortedKeys]) {
             try? data.write(to: options.runtime.appendingPathComponent("native-status.json"), options: [.atomic])
+        }
+    }
+
+    private func checkPendingSetupDeferrals() {
+        for (id, pending) in Array(pendingSetupDeferrals) {
+            let url = options.runtime.appendingPathComponent("ack/\(id).json")
+            if let data = try? Data(contentsOf: url), data.count <= 4_194_304,
+               let ack = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               ack["requestId"] as? String == id {
+                pendingSetupDeferrals.removeValue(forKey: id)
+                try? FileManager.default.removeItem(at: url)
+                pending.completion(ack["ok"] as? Bool == true ? .confirmed : .failed)
+            } else if pending.deadline < Date() {
+                pendingSetupDeferrals.removeValue(forKey: id)
+                pending.completion(.unconfirmed)
+            }
+        }
+    }
+
+    private func sendSetupDeferral(_ command: [String: Any], completion: @escaping (SetupDeferralOutcome) -> Void) {
+        let inbox = options.runtime.appendingPathComponent("inbox", isDirectory: true).resolvingSymlinksInPath()
+        guard inbox.path.hasPrefix(options.runtime.path + "/") else { completion(.failed); return }
+        var envelope = command
+        let requestID = UUID().uuidString.lowercased()
+        envelope["requestId"] = requestID
+        do {
+            let data = try JSONSerialization.data(withJSONObject: envelope, options: [.sortedKeys])
+            try data.write(to: inbox.appendingPathComponent(requestID + ".json"), options: [.atomic])
+            pendingSetupDeferrals[requestID] = (Date().addingTimeInterval(8), completion)
+        } catch {
+            completion(.failed)
         }
     }
 

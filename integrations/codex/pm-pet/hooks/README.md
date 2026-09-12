@@ -37,6 +37,8 @@ No shell chaining, redirection, environment assignments, dynamic substitution, P
 
 `UserPromptSubmit` only adds a short state reminder. It neither stores the prompt nor marks answers received. New messages, timeout, app exit, and silence cannot release the wait.
 
+For an explicitly requested recovery, the same fixed launcher may submit a full reviewed report using `cancelQuestionId`, a supported `cancellationReason`, and the actual latest `sourceUserMessageId`. The bridge checks that evidence and records cancellation separately from an answer. Resolve and cancel cannot be combined. A metadata-only `classifyQuestion` report can label the exact current question as optional setup; it cannot advance progress or release the gate.
+
 ## Coverage and acceptance
 
 This hook guards **already registered pending questions**. It does not automatically register an async question: the transcript observer has a polling interval. Stop children and owned commands before asking; explicitly report the question first when needed, or wait for the observer to persist it. An absent reminder during this interval is not permission to continue building.

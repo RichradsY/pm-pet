@@ -246,6 +246,12 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent
 #pm-pet-desktop .pp-question p:focus-visible{outline:2px solid var(--pp-accent);outline-offset:2px;border-radius:3px}
 #pm-pet-desktop .pp-panel[data-waiting=true] .pp-road{flex:1 1 auto;min-height:22px;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin}
 #pm-pet-desktop .pp-return{background:light-dark(#fcfffa66,#edfff112);border-color:var(--pp-glass-edge);font-weight:500}
+#pm-pet-desktop .pp-question-actions{display:flex;align-items:center;gap:7px}
+#pm-pet-desktop .pp-question-actions .pp-return{flex:1;min-width:0}
+#pm-pet-desktop .pp-defer-setup{flex:none;padding:7px 5px;border:0;border-radius:7px;background:transparent;font-size:11px;color:var(--pp-muted)}
+#pm-pet-desktop .pp-defer-setup:hover{background:light-dark(#36543e12,#dcf7e11f)}
+#pm-pet-desktop .pp-defer-setup:disabled{opacity:.65;cursor:default}
+#pm-pet-desktop .pp-setup-feedback{margin-top:7px;font-size:11px;line-height:1.4;color:var(--pp-low);overflow-wrap:anywhere}
 #pm-pet-desktop .native-no-plan{font-size:12px;color:var(--pp-muted);margin:7px 0}
 #pm-pet-desktop .native-panel-footer{display:flex;justify-content:space-between;gap:8px;margin-top:9px;align-items:center;color:var(--pp-muted);font-size:10px}
 #pm-pet-desktop .native-menu{border:0;background:transparent;font-size:15px;padding:0 4px;line-height:20px;border-radius:6px}
@@ -278,7 +284,7 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent
 </section>
 <section data-surface="panel" hidden><div class="pp-panel" role="region" aria-label="Build progress">
 <div class="pp-header"><span class="native-title"></span><div class="pp-header-right"><span class="native-phase"></span><button class="pp-close" aria-label="Hide progress">×</button></div></div>
-<div class="pp-question" hidden><span class="pp-question-label">Your decision</span><p tabindex="0" aria-label="Question details"></p><div class="native-input-hint" hidden></div><button class="pp-return">Answer in Codex ↗</button></div>
+<div class="pp-question" hidden><span class="pp-question-label">Your decision</span><p tabindex="0" aria-label="Question details"></p><div class="native-input-hint" hidden></div><div class="pp-question-actions"><button class="pp-return">Answer in Codex ↗</button><button class="pp-defer-setup" type="button" hidden>Not now</button></div><div class="pp-setup-feedback" role="status" hidden></div></div>
 <div class="pp-title"></div><div class="native-no-plan">No roadmap reported</div>
 <div class="pp-progress" hidden><div class="pp-progress-meta"><span class="pp-progress-count"></span><span class="pp-progress-percent"></span></div><div class="pp-progress-track" role="progressbar" aria-label="Roadmap completion" aria-valuemin="0" aria-valuemax="100"><span class="pp-progress-fill"></span></div></div>
 <details class="pp-road" hidden><summary>View roadmap</summary><ol></ol></details>
@@ -313,15 +319,42 @@ function questionState(p){
  const itemID=item?.questionItemId??null;
  const kind=attentionKind(p);
  const destination=['codex','system','terminal'].includes(question.destination)?question.destination:'codex';
+ const setup=question.purpose==='setup';
+ const optionalSetup=setup&&question.optional===true;
  return {
-  key:JSON.stringify([p.id,p.generation,question.id,itemIndex,itemID,status]),
-  status,reviewing,kind,destination,itemIndex,
+  key:JSON.stringify([p.id,p.generation,question.id,itemIndex,itemID,status,setup,optionalSetup]),
+  status,reviewing,kind,destination,itemIndex,setup,optionalSetup,
   attention:reviewing?'review':kind,
   text:item?.text||question.text||'',
   canAnswer:!reviewing,
+  canDefer:optionalSetup&&!reviewing,
   showDestinationHint:!reviewing&&kind==='input'&&destination!=='codex',
-  action:reviewing||kind==='input'&&destination!=='codex'?'open_codex':kind==='input'?'provide_info':'answer'
+  action:reviewing||setup||kind==='input'&&destination!=='codex'?'open_codex':kind==='input'?'provide_info':'answer'
  };
+}
+function setupDeferRequest(p){
+ const question=questionState(p);
+ if(!question?.canDefer||typeof p.question.id!=='string'||!p.question.id||!Number.isInteger(p.generation)||p.generation<0)return null;
+ return {action:'deferSetup',questionId:p.question.id,generation:p.generation};
+}
+function setupDeferralState(previous,event){
+ if(event.type==='start'){
+  const request=setupDeferRequest(event.pet);
+  if(!request||previous&&['pending','confirmed'].includes(previous.status))return previous;
+  return {...request,token:event.token,key:questionState(event.pet).key,status:'pending',error:null};
+ }
+ if(!previous)return null;
+ if(event.type==='sync')return setupDeferRequest(event.pet)&&questionState(event.pet)?.key===previous.key?previous:null;
+ if(event.token!==previous.token)return previous;
+ if(event.type==='finish'){
+  if(event.questionId!==previous.questionId||event.generation!==previous.generation||previous.status!=='pending')return previous;
+  const outcome=event.outcome??(event.ok?'confirmed':'failed');
+  if(outcome==='confirmed')return {...previous,status:'confirmed',error:null};
+  if(outcome==='failed')return {...previous,status:'failed',error:'Could not defer setup. Try again or open Codex.'};
+  return {...previous,status:'unconfirmed',error:'Setup change unconfirmed. Try again or open Codex.'};
+ }
+ if(event.type==='timeout'&&['pending','confirmed'].includes(previous.status))return {...previous,status:'unconfirmed',error:'Setup change unconfirmed. Try again or open Codex.'};
+ return previous;
 }
 function completedTransitions(previous,next){
  if(!previous||previous.id!==next.id||previous.generation!==next.generation||next.question||next.roadmapNeedsUpdate)return [];
@@ -349,6 +382,32 @@ function compactRoadmap(p){
  return model;
 }
 /* PET_STATE_END */
+let setupAttempt=null,setupTimer=null,setupSequence=0;
+function renderSetupDeferral(){
+ const eligible=!!setupDeferRequest(currentPet||{});
+ const button=$('.pp-defer-setup'),feedback=$('.pp-setup-feedback');
+ const busy=setupAttempt&&['pending','confirmed'].includes(setupAttempt.status);
+ button.hidden=!eligible;button.disabled=!!busy;button.textContent=busy?(setupAttempt.status==='confirmed'?'Updating…':'Deferring…'):'Not now';
+ button.setAttribute('aria-busy',String(!!busy));feedback.hidden=!eligible||!setupAttempt?.error;feedback.textContent=setupAttempt?.error||'';measure();
+}
+function watchSetupAttempt(delay){
+ clearTimeout(setupTimer);const token=setupAttempt?.token;
+ setupTimer=setTimeout(()=>{setupAttempt=setupDeferralState(setupAttempt,{type:'timeout',token});renderSetupDeferral();},delay);
+}
+window.finishSetupDefer=function(result){
+ const next=setupDeferralState(setupAttempt,{type:'finish',token:result.requestToken,questionId:result.questionId,generation:result.generation,outcome:result.outcome,ok:result.ok===true});
+ if(next===setupAttempt)return;
+ setupAttempt=next;clearTimeout(setupTimer);
+ if(setupAttempt?.status==='confirmed')watchSetupAttempt(5000);
+ renderSetupDeferral();
+};
+$('.pp-defer-setup').onclick=()=>{
+ const next=setupDeferralState(setupAttempt,{type:'start',pet:currentPet||{},token:Date.now()+'-'+(++setupSequence)});
+ if(!next||next===setupAttempt)return;
+ setupAttempt=next;renderSetupDeferral();watchSetupAttempt(10000);
+ try{send({...setupDeferRequest(currentPet),requestToken:setupAttempt.token});}
+ catch{window.finishSetupDefer({ok:false,questionId:setupAttempt.questionId,generation:setupAttempt.generation,requestToken:setupAttempt.token});}
+};
 function activity(p){return p.question?'attention':['unavailable','disconnected','error'].includes(p.sourceStatus)?'idle':({waiting:'attention',paused:'idle',building:'reading',running:'reading',planning:'reading',checking:'reading',complete:'complete',completed:'complete'}[p.phase]||'idle');}
 function updateAnimation(p){
  const next=activity(p);const completed=completedTransitions(priorPet,p);const mini=$('.native-roadmap');
@@ -361,11 +420,11 @@ function updateAnimation(p){
 }
 function renderMini(p,panelVisible){
  const row=$('.native-roadmap');row.hidden=!!panelVisible;
- const model=compactRoadmap(p),kind=attentionKind(p);
+ const model=compactRoadmap(p),question=questionState(p),kind=question?.attention;
  const items=model.visible;
- const signature=JSON.stringify([items,model.before,model.after,model.reviewing,kind]);
+ const signature=JSON.stringify([items,model.before,model.after,model.reviewing,kind,question?.setup]);
  if(signature===miniSignature)return;miniSignature=signature;row.replaceChildren();
- const names={done:'Completed',current:'In progress',pending:'Not started',decision:'Feedback needed',input:'Information needed',review:questionState(p)?.reviewing?'Reviewing reply':'Reviewing request'};
+ const names={done:'Completed',current:'In progress',pending:'Not started',decision:question?.setup?'Setup needed':'Feedback needed',input:question?.setup?'Setup needed':'Information needed',review:question?.reviewing?'Reviewing reply':'Reviewing request'};
  function button(label,status,index,overflow){
   const b=document.createElement('button');b.type='button';b.className='mini-step'+(overflow?' mini-overflow':'');b.dataset.status=status;b.title=label+' · Open roadmap';b.setAttribute('aria-label',b.title);b.style.setProperty('--dot-index',index);
   if(overflow)b.textContent=overflow;else{const dot=document.createElement('span');dot.className='mini-dot';dot.setAttribute('aria-hidden','true');b.append(dot)}
@@ -464,11 +523,11 @@ window.renderPet=function(data){
  const scale=Math.max(.75,Math.min(1.5,(Number(p.size)||100)/100));const inset=Number(data.topInset)||24;owl.style.transform='scale('+scale+')';owl.style.top=(14+inset)+'px';$('.native-name').style.top=(104*scale+15+inset)+'px';
  $('.native-name').textContent=p.title||'Codex conversation';$('.native-name').title=p.title||'Codex conversation';
  const question=questionState(p),kind=question?.kind,attention=question?.attention;owl.dataset.attention=attention||'';$('.native-needs').dataset.kind=attention||'';
- owl.setAttribute('aria-expanded',String(!!data.panelVisible));$('.native-needs').hidden=!kind||!data.panelVisible;text('.native-needs',question?.reviewing?'Reviewing reply':kind==='input'?'Input needed':'Feedback needed');
+ owl.setAttribute('aria-expanded',String(!!data.panelVisible));$('.native-needs').hidden=!kind||!data.panelVisible;text('.native-needs',question?.reviewing?'Reviewing reply':question?.setup?'Setup needed':kind==='input'?'Input needed':'Feedback needed');
  renderMini(p,data.panelVisible);updateAnimation(p);renderChildren(p);quota(data.quota,p);
  text('.native-title',p.title||'Codex conversation');
  const reviewing=!!p.roadmapNeedsUpdate;
- text('.native-phase',question?.reviewing?'Reviewing reply':kind==='input'?'Input needed':kind?'Feedback needed':reviewing?'Planning':({building:'Building',running:'Building',planning:'Planning',checking:'Checking',waiting:'Needs you',complete:'Complete',completed:'Complete',idle:'Idle',paused:'Paused',error:'Source error'}[p.phase]||'Connected'));
+ text('.native-phase',question?.reviewing?'Reviewing reply':question?.setup?'Setup needed':kind==='input'?'Input needed':kind?'Feedback needed':reviewing?'Planning':({building:'Building',running:'Building',planning:'Planning',checking:'Checking',waiting:'Needs you',complete:'Complete',completed:'Complete',idle:'Idle',paused:'Paused',error:'Source error'}[p.phase]||'Connected'));
  text('.pp-title',reviewing?'Reviewing your new request':p.currentStep||'');$('.pp-title').hidden=!!kind||(!reviewing&&!p.currentStep);
  const progress=p.progress;const known=!reviewing&&progress&&Number.isFinite(progress.done)&&Number.isFinite(progress.total)&&progress.total>0;
  $('.native-no-plan').hidden=!!known;$('.pp-progress').hidden=!known;
@@ -477,9 +536,12 @@ window.renderPet=function(data){
  const steps=Array.isArray(p.steps)?p.steps:[];$('.pp-road').hidden=!steps.length;text('.pp-road summary',reviewing?'Previous roadmap':'View roadmap');const ol=$('.pp-road ol');ol.replaceChildren();
  roadmapState(p).all.forEach(step=>{const li=document.createElement('li');li.className='pp-step';li.dataset.status=step.status;const mark=document.createElement('span');mark.className='pp-step-mark';mark.textContent=({done:'✓',current:'›',decision:'?',input:'!'})[step.status]||'○';const label=document.createElement('span');label.textContent=step.label||'';li.append(mark,label);ol.append(li)});
  $('.pp-question').hidden=!question;text('.pp-question p',question?.reviewing?'Waiting for Codex to review your reply.':question?.text||'');$('.pp-panel').dataset.waiting=String(!!question);$('.pp-panel').dataset.attention=attention||'';
- text('.pp-question-label',question?.reviewing?'Reviewing reply':kind==='input'?'Information needed':'Your decision');
+ text('.pp-question-label',question?.reviewing?'Reviewing reply':question?.optionalSetup?'Optional setup':kind==='input'?'Information needed':'Your decision');
  $('.native-input-hint').hidden=!question?.showDestinationHint;text('.native-input-hint',question?.destination==='system'?'Input location · System window':'Input location · Terminal');
  text('.pp-return',({open_codex:'Open Codex ↗',provide_info:'Provide info in Codex ↗',answer:'Answer in Codex ↗'})[question?.action]||'Open Codex ↗');
+ const nextSetupAttempt=setupDeferralState(setupAttempt,{type:'sync',pet:p});
+ if(nextSetupAttempt!==setupAttempt){clearTimeout(setupTimer);setupAttempt=nextSetupAttempt;}
+ renderSetupDeferral();
  const questionKey=question?.key??null;
  if(questionKey&&questionKey!==displayedQuestionKey){$('.pp-panel').scrollTop=0;$('.pp-question p').scrollTop=0;$('.pp-road').scrollTop=0;}
  displayedQuestionKey=questionKey;

@@ -30,6 +30,11 @@ MAX_LINE_BYTES = 16 * 1024 * 1024
 MAX_PENDING_INPUT_CALLS = 32
 MAX_INPUT_ITEMS = 32
 MAX_INPUT_TOMBSTONES = 256
+# Native state/ack readers accept 4 MiB. New question admission uses half of that
+# across the entire registry, leaving room for roadmaps, outcomes, and envelopes.
+MAX_QUESTION_STATE_BYTES = 2 * 1024 * 1024
+TERMINAL_INPUT_STATUSES = {"resolved", "cancelled"}
+CANCELLATION_REASONS = {"setup_deferred", "user_cancelled", "superseded"}
 PHASES = {"idle", "planning", "building", "checking", "waiting", "complete", "paused", "error"}
 QUESTION_KINDS = {"decision", "input"}
 QUESTION_DESTINATIONS = {"codex", "system", "terminal"}
@@ -299,34 +304,54 @@ class Bridge:
     @staticmethod
     def input_question(call):
         pending = next((item for item in call["items"] if not item["answered"]), call["items"][0])
-        return {"id": "input:" + call["callId"], "text": pending["text"], "kind": "decision", "destination": "codex",
+        question = {"id": "input:" + call["callId"], "text": pending["text"], "kind": "decision", "destination": "codex",
                 "origin": "codex-input-tool", "callId": call["callId"], "status": call["status"],
-                "items": copy.deepcopy(call["items"])}
+                "observedAt": call["observedAt"], "items": copy.deepcopy(call["items"])}
+        for field in ("purpose", "optional"):
+            if field in call:
+                question[field] = call[field]
+        return question
 
     def refresh_input_queue(self, pet):
         history = pet.setdefault("inputCallHistory", {})
-        calls = sorted((call for call in history.values() if call["status"] != "resolved"), key=lambda call: (call["observedAt"], call["callId"]))
+        calls = sorted((call for call in history.values() if call["status"] not in TERMINAL_INPUT_STATUSES), key=lambda call: (call["observedAt"], call["callId"]))
         pet["pendingQuestions"] = [self.input_question(call) for call in calls]
         if pet.get("questionOverflow"):
             pet["pendingQuestions"].append(copy.deepcopy(pet["questionOverflow"]))
         current = pet.get("question")
         if current and current.get("origin") == "codex-input-tool":
             call = history.get(current.get("callId"))
-            pet["question"] = self.input_question(call) if call and call["status"] != "resolved" else None
+            pet["question"] = self.input_question(call) if call and call["status"] not in TERMINAL_INPUT_STATUSES else None
         if not pet.get("question") and pet["pendingQuestions"]:
             pet["question"] = copy.deepcopy(pet["pendingQuestions"][0])
         if pet.get("question"):
             pet["phase"] = "waiting"
-        tombstones = sorted((call for call in history.values() if call["status"] == "resolved"), key=lambda call: call["observedAt"])
+        tombstones = sorted((call for call in history.values() if call["status"] in TERMINAL_INPUT_STATUSES), key=lambda call: call["observedAt"])
         for call in tombstones[:-MAX_INPUT_TOMBSTONES]:
             pet["questionHistoryPrunedBefore"] = max(pet.get("questionHistoryPrunedBefore") or "", call["observedAt"])
             del history[call["callId"]]
 
-    def input_overflow(self, pet, reason):
+    def input_overflow(self, pet, reason, call_id=None, observed=None):
         pet["questionOverflow"] = {"id": "input-queue-overflow", "text": "Review all pending questions in Codex; this question group exceeds the local display limit.",
                                    "kind": "decision", "destination": "codex", "origin": "codex-input-limit", "status": "needs_reconciliation", "items": [], "reason": reason}
+        if observed:
+            pet["questionOverflow"]["observedAt"] = observed
+        if call_id and observed:
+            # Keep only identity/provenance for rejected calls, never their prompt
+            # bodies or answers. Replaying them must not create a second question.
+            history = pet.setdefault("inputOverflowHistory", {})
+            history[call_id] = {"callId": call_id, "observedAt": observed, "reason": reason}
+            for old_id in sorted(history, key=lambda key: history[key]["observedAt"])[:-MAX_INPUT_TOMBSTONES]:
+                pet["questionOverflowPrunedBefore"] = max(pet.get("questionOverflowPrunedBefore") or "", history[old_id]["observedAt"])
+                del history[old_id]
         self.refresh_input_queue(pet)
         self.changed = True
+
+    def question_candidate_fits(self, pet, candidate):
+        projected = dict(self.state)
+        projected["pets"] = [candidate if item["id"] == pet["id"] else item for item in self.state["pets"]]
+        serialized = json.dumps(projected, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode("utf-8")
+        return len(serialized) + 1 <= MAX_QUESTION_STATE_BYTES
 
     def observe_input_call(self, pet, payload, observed):
         if payload.get("type") != "function_call" or payload.get("name") != "request_user_input_async" or not observed:
@@ -335,10 +360,11 @@ class Bridge:
         if not isinstance(call_id, str) or not re.fullmatch(r"call_[A-Za-z0-9_-]{1,80}", call_id):
             return
         history = pet.setdefault("inputCallHistory", {})
-        if call_id in history:
+        if call_id in history or call_id in pet.get("inputOverflowHistory", {}):
             return
-        start = max(pet.get("questionWatchStartedAt") or now_iso(), pet.get("questionHistoryPrunedBefore") or "")
-        if observed < start or (pet.get("questionHistoryPrunedBefore") and observed <= pet["questionHistoryPrunedBefore"]):
+        pruned_before = max(pet.get("questionHistoryPrunedBefore") or "", pet.get("questionOverflowPrunedBefore") or "")
+        start = max(pet.get("questionWatchStartedAt") or now_iso(), pruned_before)
+        if observed < start or (pruned_before and observed <= pruned_before):
             return
         try:
             arguments = json.loads(payload.get("arguments", ""))
@@ -348,18 +374,23 @@ class Bridge:
         if not isinstance(questions, list) or not questions:
             return
         if len(questions) > MAX_INPUT_ITEMS:
-            self.input_overflow(pet, "too_many_questions")
+            self.input_overflow(pet, "too_many_questions", call_id, observed)
             return
         if any(not isinstance(question, dict) or not isinstance(question.get("title"), str) for question in questions):
             return
-        if sum(1 for call in history.values() if call["status"] != "resolved") >= MAX_PENDING_INPUT_CALLS:
-            self.input_overflow(pet, "too_many_calls")
+        if sum(1 for call in history.values() if call["status"] not in TERMINAL_INPUT_STATUSES) >= MAX_PENDING_INPUT_CALLS:
+            self.input_overflow(pet, "too_many_calls", call_id, observed)
             return
         items = [{"index": index, "questionItemId": json.dumps(["request_user_input_async", call_id, index], separators=(",", ":")),
                   "text": (question["title"][:1199] + "…" if len(question["title"]) > 1200 else question["title"]) or "A question in Codex needs your reply.",
                   "questionDigest": hashlib.sha256(question["title"].encode("utf-8")).hexdigest(), "answered": False} for index, question in enumerate(questions)]
-        history[call_id] = {"callId": call_id, "observedAt": observed, "status": "awaiting_reply", "items": items}
-        self.refresh_input_queue(pet)
+        candidate = copy.deepcopy(pet)
+        candidate["inputCallHistory"][call_id] = {"callId": call_id, "observedAt": observed, "status": "awaiting_reply", "items": items}
+        self.refresh_input_queue(candidate)
+        if not self.question_candidate_fits(pet, candidate):
+            self.input_overflow(pet, "state_payload_budget", call_id, observed)
+            return
+        pet.update(candidate)
         if not pet.get("sourceUpdatedAt") or observed > pet["sourceUpdatedAt"]:
             pet["sourceUpdatedAt"] = observed
             pet["sourceStatus"] = "connected"
@@ -405,8 +436,16 @@ class Bridge:
             call_id, index = identity[1:]
             if not isinstance(call_id, str) or isinstance(index, bool) or not isinstance(index, int):
                 continue
+            if call_id in pet.get("inputOverflowHistory", {}):
+                matched = True  # The original surface/main agent handles reconciliation.
+                continue
             call = pet.get("inputCallHistory", {}).get(call_id)
-            if not call or call["status"] == "resolved" or not observed or observed < call["observedAt"] or not 0 <= index < len(call["items"]):
+            if not call or not observed or observed < call["observedAt"]:
+                continue
+            if call["status"] in TERMINAL_INPUT_STATUSES:
+                matched = True  # Late reply envelopes cannot reopen a terminal decision or its roadmap.
+                continue
+            if not 0 <= index < len(call["items"]):
                 continue
             expected = call["items"][index]
             if not isinstance(reply["question"], str):
@@ -427,6 +466,70 @@ class Bridge:
                 pet["sourceStatus"] = "connected"
             self.changed = True
         return matched
+
+    def classify_question(self, pet, classification):
+        if not isinstance(classification, dict) or set(classification) != {"id", "purpose", "optional"} or classification.get("purpose") != "setup" or classification.get("optional") is not True:
+            raise BridgeError("classifyQuestion must identify an explicitly optional setup question.")
+        current = pet.get("question")
+        if not current or current["id"] != classification["id"]:
+            raise BridgeError("Classification must match the current question id.")
+        current.update({"purpose": "setup", "optional": True})
+        if current.get("origin") == "codex-input-tool":
+            call = pet.get("inputCallHistory", {}).get(current.get("callId"))
+            if not call or call["status"] in TERMINAL_INPUT_STATUSES:
+                raise BridgeError("This observed question is no longer pending.")
+            call.update({"purpose": "setup", "optional": True})
+        self.refresh_input_queue(pet)
+
+    def cancel_question(self, pet, question_id, reason, source_user_message_id=None, from_pet=False, refresh=True):
+        current = pet.get("question")
+        if not current or current["id"] != question_id:
+            raise BridgeError("Cancellation must match the current question id.")
+        if not isinstance(reason, str) or reason not in CANCELLATION_REASONS:
+            raise BridgeError("Unknown cancellationReason.")
+        if reason == "setup_deferred" and not (current.get("purpose") == "setup" and current.get("optional") is True):
+            raise BridgeError("Only an explicitly optional setup question can be deferred.")
+        observed = current.get("observedAt") or pet.get("questionObservedAt") or pet.get("reportObservedAt")
+        if not from_pet:
+            latest = pet.get("requestObservedAt")
+            if not source_user_message_id or source_user_message_id != pet.get("requestMessageId") or not latest or not observed or latest <= observed:
+                raise BridgeError("Cancellation requires the latest root user message id observed after this question.")
+        outcome = {"id": question_id, "status": "cancelled", "observedAt": observed, "cancelledAt": now_iso(),
+                   "cancellationReason": reason, "source": "pet" if from_pet else "root-user-message"}
+        if source_user_message_id:
+            outcome["sourceUserMessageId"] = source_user_message_id
+        for field in ("purpose", "optional"):
+            if field in current:
+                outcome[field] = current[field]
+        if current.get("origin") == "codex-input-tool":
+            call = pet.get("inputCallHistory", {}).get(current.get("callId"))
+            if not call or call["status"] in TERMINAL_INPUT_STATUSES:
+                raise BridgeError("This observed question is no longer pending.")
+            outcome["questionCount"] = len(call["items"])
+            outcome["answeredCount"] = sum(1 for item in call["items"] if item["answered"])
+            pet["inputCallHistory"][call["callId"]] = dict(outcome, callId=call["callId"], observedAt=call["observedAt"])
+        else:
+            outcomes = pet.setdefault("questionOutcomes", {})
+            outcomes[question_id] = outcome
+            for key in sorted(outcomes, key=lambda key: outcomes[key]["cancelledAt"])[:-MAX_INPUT_TOMBSTONES]:
+                del outcomes[key]
+            if current.get("origin") == "codex-input-limit":
+                pet["questionOverflow"] = None
+        pet["question"] = None
+        if refresh:
+            self.refresh_input_queue(pet)
+
+    def defer_setup(self, request):
+        pet = self.require_pet(validate_id(request.get("id")))
+        generation = request.get("generation")
+        if isinstance(generation, bool) or not isinstance(generation, int) or generation != pet["generation"]:
+            raise BridgeError("A current Pet generation is required to defer setup.")
+        updated = copy.deepcopy(pet)
+        self.cancel_question(updated, request.get("questionId"), "setup_deferred", from_pet=True)
+        updated["roadmapNeedsUpdate"] = True
+        updated["phase"] = "waiting" if updated.get("question") else "planning"
+        pet.update(updated)
+        self.changed = True
 
     def preferences(self, request):
         pet = self.require_pet(validate_id(request.get("id")))
@@ -465,10 +568,17 @@ class Bridge:
         sequence = report.get("sequence")
         if isinstance(sequence, bool) or not isinstance(sequence, int) or sequence <= pet["lastReportSequence"]:
             raise BridgeError("A new integer report sequence is required; read status before reporting.")
-        if pet["question"] and report.get("resolveQuestionId") != pet["question"]["id"]:
+        if "resolveQuestionId" in report and "cancelQuestionId" in report:
+            raise BridgeError("Choose either resolveQuestionId or cancelQuestionId, not both.")
+        if any(field in report for field in ("cancellationReason", "sourceUserMessageId")) and "cancelQuestionId" not in report:
+            raise BridgeError("Cancellation metadata requires cancelQuestionId.")
+        transition_id = report.get("resolveQuestionId", report.get("cancelQuestionId"))
+        if pet["question"] and transition_id != pet["question"]["id"]:
             if any(key in report for key in ("steps", "currentStep", "currentStepId", "planRevision")) or report.get("phase", "waiting") != "waiting":
                 raise BridgeError("Resolve the pending question by id before updating progress or continuing work.")
         updated = copy.deepcopy(pet)
+        if "classifyQuestion" in report:
+            self.classify_question(updated, report["classifyQuestion"])
         # Preserve the last actual plan review across later phase-only reports.
         if pet["steps"] and not pet.get("planReviewedAt"):
             updated["planReviewedAt"] = pet.get("reportObservedAt")
@@ -505,6 +615,13 @@ class Bridge:
             if report["phase"] not in PHASES:
                 raise BridgeError("Unknown phase.")
             updated["phase"] = report["phase"]
+        if "cancelQuestionId" in report:
+            if not ("steps" in report and "currentStep" in report):
+                raise BridgeError("Cancellation requires a complete roadmap review with steps and currentStep.")
+            self.cancel_question(updated, report["cancelQuestionId"], report.get("cancellationReason"),
+                                 source_user_message_id=report.get("sourceUserMessageId"), refresh=False)
+            if "phase" not in report:
+                updated["phase"] = "planning"
         if "resolveQuestionId" in report:
             current = updated.get("question")
             if not current or current["id"] != report["resolveQuestionId"]:
@@ -527,7 +644,7 @@ class Bridge:
             question = report["question"]
             if not isinstance(question, dict):
                 raise BridgeError("Use resolveQuestionId to clear a question; question must be an object.")
-            if set(question) - {"id", "text", "kind", "destination", "stepId"}:
+            if set(question) - {"id", "text", "kind", "destination", "stepId", "purpose", "optional"}:
                 raise BridgeError("Question accepts reminder metadata only, not input values or answers.")
             question_id = self.clean_text(question.get("id"), "question id", 100)
             if updated["question"] and updated["question"]["id"] != question_id:
@@ -544,8 +661,14 @@ class Bridge:
                 raise BridgeError("Question destination must be codex, system, or terminal.")
             normalized = {"id": question_id, "text": self.clean_text(question.get("text"), "question text", 1200),
                           "kind": kind, "destination": destination}
+            if "purpose" in question or "optional" in question:
+                if question.get("purpose") != "setup" or not isinstance(question.get("optional", False), bool):
+                    raise BridgeError("Optional setup metadata requires purpose setup and a boolean optional value.")
+                normalized.update({"purpose": "setup", "optional": question.get("optional", False)})
             if "stepId" in question:
                 normalized["stepId"] = self.pending_step_id(question["stepId"], updated["steps"], "question stepId")
+            if not updated["question"] or updated["question"]["id"] != question_id:
+                updated["questionObservedAt"] = now_iso()
             updated["question"] = normalized
         self.refresh_input_queue(updated)
         all_deliveries_done = bool(updated["steps"]) and all(step["done"] for step in updated["steps"])
@@ -592,6 +715,8 @@ class Bridge:
             self.preferences(request)
         elif action == "report":
             self.report(request)
+        elif action == "defer_setup":
+            self.defer_setup(request)
         elif action == "status":
             if request.get("all") is not True:
                 validate_id(request.get("id"))
@@ -825,10 +950,12 @@ def send_request(runtime, request, timeout=8):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("serve", "enable", "disable", "preferences", "report", "status"))
+    parser.add_argument("action", choices=("serve", "enable", "disable", "preferences", "report", "status", "defer_setup"))
     parser.add_argument("--runtime", required=True, type=Path)
     parser.add_argument("--conversation")
     parser.add_argument("--title")
+    parser.add_argument("--generation", type=int, help="Current binding generation for an explicit setup deferral")
+    parser.add_argument("--question-id", help="Current optional setup question id")
     parser.add_argument("--transcript", type=Path)
     parser.add_argument("--sessions-root", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--all", action="store_true", help="Explicitly disable every Pet")
@@ -849,6 +976,11 @@ def main(argv=None):
             request["id"] = validate_id(args.conversation or os.environ.get("CODEX_THREAD_ID"))
         if args.all:
             request["all"] = True
+        if args.action == "defer_setup":
+            if args.generation is None or not args.question_id:
+                raise BridgeError("defer_setup requires --generation and --question-id from current status.")
+            request["generation"] = args.generation
+            request["questionId"] = args.question_id
         if args.title:
             request["title"] = args.title
         if args.transcript:

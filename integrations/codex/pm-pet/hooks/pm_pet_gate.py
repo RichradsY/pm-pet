@@ -128,15 +128,29 @@ def control_command(event, home, runtime, session_id, pet):
         question = pet.get("question") or next(iter(pet.get("pendingQuestions", [])), None)
         if not isinstance(report, dict) or not isinstance(question, dict):
             return False
-        # The bridge performs full validation and acknowledgement; the guard does
-        # not resolve anything. In particular, replying is not a release itself.
-        return (report.get("resolveQuestionId") == question.get("id")
-                and bool(question.get("id"))
-                and type(report.get("generation")) is int
+        # The bridge validates and acknowledges recovery; this read-only hook
+        # must not prevent an explicitly requested cancellation from reaching it.
+        current = (bool(question.get("id")) and type(report.get("generation")) is int
                 and report["generation"] == pet.get("generation")
                 and type(report.get("sequence")) is int
-                and report["sequence"] > pet.get("lastReportSequence", -1)
-                and isinstance(report.get("steps"), list)
+                and report["sequence"] > pet.get("lastReportSequence", -1))
+        if not current:
+            return False
+        classification = report.get("classifyQuestion")
+        if (current and isinstance(classification, dict)
+                and classification == {"id": question["id"], "purpose": "setup", "optional": True}
+                and set(report) <= {"generation", "sequence", "classifyQuestion"}):
+            return True  # Metadata only: cannot answer or release the wait.
+        resolving = "resolveQuestionId" in report
+        cancelling = "cancelQuestionId" in report
+        if resolving == cancelling:
+            return False
+        action_valid = report.get("resolveQuestionId") == question["id"] if resolving else (
+            report.get("cancelQuestionId") == question["id"]
+            and report.get("cancellationReason") in {"setup_deferred", "user_cancelled", "superseded"}
+            and bool(pet.get("requestMessageId"))
+            and report.get("sourceUserMessageId") == pet.get("requestMessageId"))
+        return (current and action_valid and isinstance(report.get("steps"), list)
                 and isinstance(report.get("currentStep"), str)
                 and bool(report["currentStep"].strip()))
     except (OSError, ValueError, TypeError):
