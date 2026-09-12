@@ -1,0 +1,34 @@
+# Local development and generated artifacts
+.DS_Store
+.build/
+build/
+dist/
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+.env
+.env.*
+!.env.example
+*.log
+*.dSYM/
+*.xcuserstate
+xcuserdata/
+
+# Signing material and local runtime bindings must never enter Git history
+*.p12
+*.p8
+*.mobileprovision
+*.provisionprofile
+.pm-pet/
+local-state/
+diagnostics/
+
+# Original workspace research and machine-specific notes remain local.
+# Repository-facing product and distribution documents live in docs/.
+/pain-points-and-mvp-2026-09-09.md
+/pm-pet-local-test-plan.md
+/pm-pet-mvp-brief.md
+/pm-pet-requirements.md
+/pm-pet-team-brief-2026-09-12.md
+/starter-integration-research-2026-09-10.md

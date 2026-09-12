@@ -1,0 +1,505 @@
+<div id="pm-pet-desktop" aria-label="Owl companion interaction preview">
+<style>
+#pm-pet-desktop{--pp-paper:light-dark(#fff,#292d2e);--pp-ink:light-dark(#283330,#edf1ee);--pp-muted:light-dark(#66736d,#bac3bd);--pp-line:light-dark(#dce5de,#4a5750);--pp-green:light-dark(#42755c,#9cc9a9);--pp-warm:light-dark(#fff3d9,#4e432f);--pp-fur:light-dark(#ad7c58,#bc906c);--pp-wing:light-dark(#8a5e43,#936c4e);--pp-cream:light-dark(#fff0d5,#f0daba);--pp-face:light-dark(#3d302b,#33261f);--pp-eye-white:light-dark(#fffdf8,#fff5e4);--pp-gold:light-dark(#eea949,#e5a34f);--pp-pink:light-dark(#e9ad9b,#dca395);--pp-chick:light-dark(#ffe196,#efd089);--pp-chick-wing:light-dark(#efc66e,#d6ac60);--pp-bg1:light-dark(#f0f2ed,#293833);--pp-bg2:light-dark(#dce6df,#25343c);--pp-shadow:light-dark(#374d3b20,#00000038);--pp-low:light-dark(#b32935,#ffb0b9);--pp-low-bg:light-dark(#fce9ec,#502c34);--pp-mid:light-dark(#955009,#ffd095);--pp-mid-bg:light-dark(#fff0da,#4b3926);--pp-high:light-dark(#266d43,#a2dfb9);--pp-high-bg:light-dark(#e5f3e9,#293e31);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif;color:var(--pp-ink)}
+#pm-pet-desktop *{box-sizing:border-box}
+#pm-pet-desktop .pp-caption{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:0 0 10px;font-size:12px;color:var(--pp-muted)}
+#pm-pet-desktop .pp-caption-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+#pm-pet-desktop .pp-demo-lifecycle{font:inherit;border:0;border-bottom:1px solid var(--pp-line);padding:0 0 1px;background:transparent;color:var(--pp-green)}
+#pm-pet-desktop .pp-preview-controls{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:0 0 12px}
+#pm-pet-desktop .pp-preview-controls button{font-size:12px;border:1px solid var(--pp-line);border-radius:8px;background:var(--pp-paper);padding:5px 10px;color:var(--pp-muted)}
+#pm-pet-desktop .pp-preview-controls button[aria-pressed=true]{color:var(--pp-ink);background:var(--pp-bg2);border-color:var(--pp-muted)}
+#pm-pet-desktop .pp-preview-controls button:disabled{opacity:.5;cursor:default}
+#pm-pet-desktop .pp-scene{position:relative;height:490px;background:linear-gradient(140deg,var(--pp-bg1),var(--pp-bg2));border-radius:16px;isolation:isolate}
+#pm-pet-desktop .pp-corner{position:absolute;top:16px;left:18px;font-size:12px;color:var(--pp-muted);pointer-events:none}
+#pm-pet-desktop button{font:inherit;color:inherit;cursor:pointer}
+#pm-pet-desktop .pp-panel{position:absolute;z-index:4;width:312px;max-width:calc(100% - 24px);padding:14px 16px;background:var(--pp-paper);border:1px solid var(--pp-line);border-radius:18px;box-shadow:0 12px 32px var(--pp-shadow)}
+#pm-pet-desktop .pp-panel::after{content:"";position:absolute;left:var(--pp-tail-x,50%);bottom:-6px;width:10px;height:10px;transform:translateX(-50%) rotate(45deg);background:var(--pp-paper);border-right:1px solid var(--pp-line);border-bottom:1px solid var(--pp-line);pointer-events:none}
+#pm-pet-desktop .pp-panel:not([hidden]){animation:pp-panel-in .14s cubic-bezier(.22,1,.36,1)}
+#pm-pet-desktop .pp-header{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;color:var(--pp-muted)}
+#pm-pet-desktop .pp-header>span:first-child{min-width:0;overflow-wrap:anywhere}
+#pm-pet-desktop .pp-header-right{display:flex;align-items:center;gap:6px;flex-shrink:0}
+#pm-pet-desktop .pp-close{border:0;padding:2px 6px;background:transparent;border-radius:6px;font-size:19px;line-height:22px}
+#pm-pet-desktop .pp-title{font-size:16px;font-weight:500;margin:7px 0 11px}
+#pm-pet-desktop .pp-progress-meta{display:flex;justify-content:space-between;gap:10px;font-size:12px;color:var(--pp-muted);font-variant-numeric:tabular-nums}
+#pm-pet-desktop .pp-progress-track{height:5px;background:var(--pp-line);border-radius:4px;margin-top:7px;overflow:hidden}
+#pm-pet-desktop .pp-progress-fill{display:block;height:100%;width:0;background:var(--pp-green);border-radius:inherit;transition:width .2s ease-out}
+#pm-pet-desktop .pp-sync-note{margin-top:6px;font-size:11px;color:var(--pp-muted)}
+#pm-pet-desktop .pp-panel[data-waiting=true] .pp-progress-fill{background:var(--pp-mid)}
+#pm-pet-desktop .pp-road{margin-top:9px;font-size:12px;color:var(--pp-muted)}
+#pm-pet-desktop .pp-road summary{cursor:pointer;width:fit-content}
+#pm-pet-desktop .pp-road ol{list-style:none;margin:9px 0 0;padding:0;display:grid;gap:7px}
+#pm-pet-desktop .pp-step{display:flex;gap:8px;align-items:baseline;line-height:1.5}
+#pm-pet-desktop .pp-step-mark{width:12px;flex:none}
+#pm-pet-desktop .pp-step[data-status=current]{color:var(--pp-green);font-weight:500}
+#pm-pet-desktop .pp-step[data-status=blocked]{color:var(--pp-mid);font-weight:500}
+#pm-pet-desktop .pp-step[data-status=done] .pp-step-mark{color:var(--pp-green)}
+#pm-pet-desktop .pp-question{background:var(--pp-warm);border-radius:10px;padding:10px;margin-top:12px}
+#pm-pet-desktop .pp-question p{font-size:13px;margin:0 0 8px;line-height:1.5}
+#pm-pet-desktop .pp-question-label{display:block;font-size:11px;font-weight:500;margin-bottom:5px;color:var(--pp-ink)}
+#pm-pet-desktop .pp-panel[data-waiting=true] [data-status]{color:var(--pp-mid)}
+#pm-pet-desktop .pp-return{width:100%;padding:7px 10px;border:1px solid var(--pp-line);border-radius:7px;background:var(--pp-paper);font-size:12px}
+#pm-pet-desktop .pp-settings{margin-top:12px;padding-top:9px;border-top:1px solid var(--pp-line)}
+#pm-pet-desktop .pp-settings summary{font-size:12px;color:var(--pp-muted);cursor:pointer;width:fit-content}
+#pm-pet-desktop .pp-usage-setting{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--pp-muted);margin-top:10px}
+#pm-pet-desktop .pp-usage-setting input{accent-color:var(--pp-green)}
+#pm-pet-desktop .pp-size-control{display:flex;align-items:center;gap:8px;margin-top:9px;font-size:12px;color:var(--pp-muted)}
+#pm-pet-desktop .pp-size-label{white-space:nowrap}
+#pm-pet-desktop .pp-size-input{width:100%;min-width:0;margin:0;accent-color:var(--pp-green)}
+#pm-pet-desktop .pp-size-value{min-width:34px;text-align:right;font-variant-numeric:tabular-nums;color:var(--pp-ink)}
+#pm-pet-desktop .pp-usage-dock{position:absolute;z-index:3;width:max-content;max-width:calc(100% - 24px);display:flex;flex-direction:column;align-items:center;gap:6px}
+#pm-pet-desktop .pp-usage-row{display:flex;justify-content:center;gap:6px;flex-wrap:wrap}
+#pm-pet-desktop .pp-usage-pill{display:flex;align-items:center;gap:5px;padding:5px 6px 5px 9px;border-radius:9px;background:var(--pp-paper);box-shadow:0 2px 8px var(--pp-shadow);font-size:11px;white-space:nowrap;color:var(--pp-muted)}
+#pm-pet-desktop .pp-usage-pill strong{padding:1px 5px;border-radius:5px;font-weight:500;font-variant-numeric:tabular-nums;color:var(--pp-ink);background:var(--pp-bg1)}
+#pm-pet-desktop .pp-usage-pill[data-tone=low] strong{color:var(--pp-low);background:var(--pp-low-bg)}
+#pm-pet-desktop .pp-usage-pill[data-tone=mid] strong{color:var(--pp-mid);background:var(--pp-mid-bg)}
+#pm-pet-desktop .pp-usage-pill[data-tone=high] strong{color:var(--pp-high);background:var(--pp-high-bg)}
+#pm-pet-desktop .pp-window-hide,#pm-pet-desktop .pp-unavailable-hide{border:0;padding:0 4px;border-radius:5px;background:transparent;color:var(--pp-muted);font-size:16px;line-height:22px}
+#pm-pet-desktop .pp-usage-restore{background:var(--pp-paper);border:1px solid var(--pp-line);border-radius:20px;font-size:11px;padding:4px 11px;box-shadow:0 2px 8px var(--pp-shadow);white-space:nowrap}
+#pm-pet-desktop .pp-unavailable{display:flex;align-items:center;gap:6px;background:var(--pp-paper);border-radius:9px;padding:5px 8px;font-size:11px;color:var(--pp-muted)}
+#pm-pet-desktop .pp-pet{position:absolute;z-index:2;width:92px;height:104px;border:0;padding:0;background:transparent;touch-action:none;user-select:none;cursor:grab;border-radius:30px;transform-origin:top left}
+#pm-pet-desktop .pp-pet.pp-dragging{cursor:grabbing}
+#pm-pet-desktop .pp-update-dot{position:absolute;z-index:3;width:8px;height:8px;border-radius:50%;background:var(--pp-green);box-shadow:0 0 0 2px var(--pp-paper);pointer-events:none}
+#pm-pet-desktop .pp-shadow{position:absolute;width:63px;height:8px;left:14px;bottom:4px;background:var(--pp-shadow);border-radius:50%}
+#pm-pet-desktop .pp-owl{position:absolute;width:76px;height:78px;left:8px;bottom:10px;background:var(--pp-fur);border-radius:45% 45% 43% 43%;transform-origin:50% 100%;animation:pp-breathe 4s ease-in-out infinite;box-shadow:inset -4px -3px 0 var(--pp-wing)}
+#pm-pet-desktop .pp-tuft{position:absolute;top:-7px;width:18px;height:20px;background:var(--pp-fur);border-radius:80% 10% 0 0}
+#pm-pet-desktop .pp-tuft.pp-left{left:4px;transform:rotate(-18deg)}#pm-pet-desktop .pp-tuft.pp-right{right:4px;transform:scaleX(-1) rotate(-18deg)}
+#pm-pet-desktop .pp-belly{position:absolute;bottom:5px;left:16px;width:44px;height:30px;background:var(--pp-cream);border-radius:50% 50% 43% 43%}
+#pm-pet-desktop .pp-feathers{position:absolute;bottom:8px;left:26px;display:flex;gap:4px}
+#pm-pet-desktop .pp-feathers span{height:5px;width:5px;border-bottom:2px solid var(--pp-fur);border-radius:0 0 50% 50%}
+#pm-pet-desktop .pp-disc{position:absolute;top:10px;width:37px;height:42px;background:var(--pp-cream);border-radius:50%}
+#pm-pet-desktop .pp-disc.pp-left{left:3px;transform:rotate(-8deg)}#pm-pet-desktop .pp-disc.pp-right{right:3px;transform:rotate(8deg)}
+#pm-pet-desktop .pp-eye{position:absolute;top:10px;left:9px;width:20px;height:23px;background:var(--pp-face);border-radius:50%;animation:pp-blink 6s infinite;transform-origin:50% 55%}
+#pm-pet-desktop .pp-eye:before{content:"";position:absolute;top:4px;right:3px;width:7px;height:8px;background:var(--pp-eye-white);border-radius:50%}
+#pm-pet-desktop .pp-eye:after{content:"";position:absolute;bottom:4px;left:4px;width:3px;height:3px;background:var(--pp-eye-white);border-radius:50%;opacity:.8}
+#pm-pet-desktop .pp-cheek{position:absolute;top:35px;width:9px;height:5px;background:var(--pp-pink);border-radius:50%;opacity:.9}
+#pm-pet-desktop .pp-cheek.pp-left{left:8px}#pm-pet-desktop .pp-cheek.pp-right{right:8px}
+#pm-pet-desktop .pp-beak{position:absolute;left:33px;top:36px;width:10px;height:11px;background:var(--pp-gold);border-radius:3px 3px 6px 3px;transform:rotate(45deg)}
+#pm-pet-desktop .pp-wing{position:absolute;top:40px;width:15px;height:29px;background:var(--pp-wing);border-radius:65% 35% 65% 35%;transform-origin:50% 10%}
+#pm-pet-desktop .pp-wing.pp-left{left:-4px;transform:rotate(-12deg)}#pm-pet-desktop .pp-wing.pp-right{right:-4px;transform:rotate(12deg)}
+#pm-pet-desktop .pp-foot{position:absolute;bottom:-2px;width:16px;height:7px;background:var(--pp-gold);border-radius:50%}
+#pm-pet-desktop .pp-foot.pp-left{left:13px}#pm-pet-desktop .pp-foot.pp-right{right:13px}
+#pm-pet-desktop .pp-needed{position:absolute;z-index:3;white-space:nowrap;font-size:11px;padding:3px 8px;background:var(--pp-warm);border:1px solid var(--pp-line);border-radius:20px;color:var(--pp-ink);pointer-events:none}
+#pm-pet-desktop .pp-baby{position:absolute;width:30px;height:31px;bottom:8px;left:-31px;transform-origin:50% 100%;pointer-events:none}
+#pm-pet-desktop .pp-baby[data-agent=two]{left:-67px;bottom:13px}
+#pm-pet-desktop .pp-chick{position:absolute;width:30px;height:31px;bottom:0;left:0;background:var(--pp-chick);border-radius:47% 47% 43% 43%;box-shadow:inset -2px -2px 0 var(--pp-chick-wing);transform-origin:50% 100%}
+#pm-pet-desktop .pp-baby[data-phase=working] .pp-chick{animation:pp-breathe 3.5s ease-in-out infinite}
+#pm-pet-desktop .pp-baby[data-agent=two] .pp-chick{animation-delay:-1s}
+#pm-pet-desktop .pp-chick:before{content:"";position:absolute;left:12px;top:-5px;width:7px;height:8px;border-top:3px solid var(--pp-chick-wing);border-radius:50%;transform:rotate(-25deg)}
+#pm-pet-desktop .pp-chick-eyes{position:absolute;left:7px;top:10px;width:4px;height:5px;border-radius:50%;background:var(--pp-face);box-shadow:12px 0 0 var(--pp-face)}
+#pm-pet-desktop .pp-chick-beak{position:absolute;left:13px;top:16px;width:5px;height:5px;background:var(--pp-gold);border-radius:1px;transform:rotate(45deg)}
+#pm-pet-desktop .pp-chick-wing{position:absolute;top:18px;left:-2px;width:6px;height:9px;background:var(--pp-chick-wing);border-radius:50%;transform:rotate(-20deg)}
+#pm-pet-desktop .pp-chick-wing.pp-right{left:auto;right:-2px;transform:rotate(20deg)}
+#pm-pet-desktop .pp-chick-feet{position:absolute;bottom:-2px;left:6px;width:7px;height:4px;background:var(--pp-gold);border-radius:50%;box-shadow:11px 0 0 var(--pp-gold)}
+#pm-pet-desktop .pp-shell{position:absolute;left:-1px;width:32px;background:var(--pp-cream);box-shadow:inset -3px -2px 0 var(--pp-chick-wing);opacity:0}
+#pm-pet-desktop .pp-shell-top{top:-7px;height:26px;border-radius:55% 55% 0 0;clip-path:polygon(0 0,100% 0,100% 88%,82% 78%,63% 100%,43% 80%,23% 100%,0 84%)}
+#pm-pet-desktop .pp-shell-bottom{bottom:-3px;height:24px;border-radius:0 0 50% 50%;clip-path:polygon(0 14%,22% 29%,43% 6%,63% 27%,83% 6%,100% 18%,100% 100%,0 100%)}
+#pm-pet-desktop .pp-baby-done{position:absolute;top:-20px;left:9px;font-size:12px;font-weight:500;color:var(--pp-green);opacity:0}
+#pm-pet-desktop .pp-baby[data-phase=hatching]{animation:pp-hatch .9s cubic-bezier(.22,1,.36,1) both}
+#pm-pet-desktop .pp-baby[data-phase=hatching] .pp-chick{animation:pp-emerge .9s cubic-bezier(.22,1,.36,1) both}
+#pm-pet-desktop .pp-baby[data-phase=hatching] .pp-shell-top{animation:pp-shell-open .9s cubic-bezier(.22,1,.36,1) both}
+#pm-pet-desktop .pp-baby[data-phase=hatching] .pp-shell-bottom{animation:pp-shell-drop .9s cubic-bezier(.22,1,.36,1) both}
+#pm-pet-desktop .pp-baby[data-phase=leaving]{animation:pp-fledge 1.1s cubic-bezier(.25,1,.5,1) both}
+#pm-pet-desktop .pp-baby[data-phase=leaving] .pp-chick-wing{animation:pp-flutter .18s ease-in-out infinite;transform-origin:50% 0}
+#pm-pet-desktop .pp-baby[data-phase=leaving] .pp-baby-done{animation:pp-done 1.1s ease-out both}
+#pm-pet-desktop .pp-planning .pp-owl{animation:pp-think 4.2s ease-in-out infinite}
+#pm-pet-desktop .pp-checking .pp-disc{animation:pp-inspect 2.5s ease-in-out infinite}
+#pm-pet-desktop .pp-pet[data-activity=complete] .pp-owl{animation:pp-celebrate .65s ease-in-out 2}
+#pm-pet-desktop .pp-pet[data-activity=complete] .pp-wing{top:26px;transform:rotate(-40deg)}
+#pm-pet-desktop .pp-pet[data-activity=complete] .pp-wing.pp-right{transform:rotate(40deg)}
+#pm-pet-desktop .pp-brow{position:absolute;left:11px;top:6px;width:16px;height:3px;background:var(--pp-face);border-radius:50%;opacity:0}
+#pm-pet-desktop .pp-book,#pm-pet-desktop .pp-magic,#pm-pet-desktop .pp-lantern{display:none;position:absolute;pointer-events:none}
+#pm-pet-desktop .pp-book{left:7px;top:53px;width:62px;height:28px;z-index:5;transform-origin:50% 75%}
+#pm-pet-desktop .pp-book-leaf{position:absolute;left:0;top:0;width:31px;height:25px;background:var(--pp-cream);border:3px solid var(--pp-green);border-top-width:2px;border-radius:3px 8px 2px 3px;box-shadow:0 2px 0 var(--pp-wing);transform:skewY(8deg)}
+#pm-pet-desktop .pp-book-leaf.pp-right{left:31px;border-radius:8px 3px 3px 2px;transform:skewY(-8deg)}
+#pm-pet-desktop .pp-book-leaf::after,#pm-pet-desktop .pp-book-page::after{content:"";position:absolute;left:5px;right:5px;top:6px;height:1px;background:var(--pp-fur);box-shadow:0 4px 0 var(--pp-fur),0 8px 0 var(--pp-fur);opacity:.55}
+#pm-pet-desktop .pp-book-page{position:absolute;left:31px;top:0;width:27px;height:21px;background:var(--pp-eye-white);border-radius:5px 2px 2px 1px;transform-origin:0 50%;transform:skewY(-8deg)}
+#pm-pet-desktop .pp-book-ribbon{position:absolute;left:39px;top:19px;width:4px;height:10px;background:var(--pp-gold);clip-path:polygon(0 0,100% 0,100% 100%,50% 75%,0 100%)}
+#pm-pet-desktop .pp-pet[data-activity=reading] .pp-book{display:block;animation:pp-book-rock 4s ease-in-out infinite}
+#pm-pet-desktop .pp-pet[data-activity=reading] .pp-book-page{animation:pp-page-turn 3.8s cubic-bezier(.25,1,.5,1) infinite}
+#pm-pet-desktop .pp-pet[data-activity=reading] .pp-eye{animation:pp-read-eyes 3.8s ease-in-out infinite}
+#pm-pet-desktop .pp-pet[data-activity=reading] .pp-brow{opacity:.55;transform:translateY(2px) rotate(7deg)}
+#pm-pet-desktop .pp-pet[data-activity=reading] .pp-disc.pp-right .pp-brow{transform:translateY(2px) rotate(-7deg)}
+#pm-pet-desktop .pp-pet[data-activity=reading] .pp-wing{top:50px;z-index:6;height:23px}
+#pm-pet-desktop .pp-pet[data-activity=reading] .pp-wing.pp-left{left:0;transform:rotate(-42deg)}
+#pm-pet-desktop .pp-pet[data-activity=reading] .pp-wing.pp-right{right:0;animation:pp-turn-wing 3.8s ease-in-out infinite}
+#pm-pet-desktop .pp-magic{inset:0;z-index:7}
+#pm-pet-desktop .pp-wand{position:absolute;left:60px;top:16px;width:4px;height:37px;border-radius:3px;background:var(--pp-wing);box-shadow:inset 0 -9px 0 var(--pp-gold);transform-origin:50% 90%;transform:rotate(24deg)}
+#pm-pet-desktop .pp-wand::before{content:"";position:absolute;left:-5px;top:-6px;width:14px;height:14px;background:var(--pp-gold);clip-path:polygon(50% 0,62% 34%,100% 38%,72% 61%,80% 100%,50% 78%,20% 100%,28% 61%,0 38%,38% 34%)}
+#pm-pet-desktop .pp-spark{position:absolute;left:46px;top:1px;width:9px;height:9px;background:var(--pp-gold);clip-path:polygon(50% 0,64% 36%,100% 50%,64% 64%,50% 100%,36% 64%,0 50%,36% 36%);opacity:0}
+#pm-pet-desktop .pp-spark:nth-child(3){left:25px;top:12px;width:7px;height:7px;--pp-spark-delay:.12s}
+#pm-pet-desktop .pp-spark:nth-child(4){left:66px;top:2px;width:6px;height:6px;--pp-spark-delay:.24s}
+#pm-pet-desktop .pp-pet[data-activity=magic] .pp-magic{display:block}
+#pm-pet-desktop .pp-pet[data-activity=magic] .pp-owl{animation:pp-cast 1.2s cubic-bezier(.25,1,.5,1) both}
+#pm-pet-desktop .pp-pet[data-activity=magic] .pp-wand{animation:pp-wand-swish 1.2s cubic-bezier(.25,1,.5,1) both}
+#pm-pet-desktop .pp-pet[data-activity=magic] .pp-spark{animation:pp-sparkle .85s cubic-bezier(.25,1,.5,1) var(--pp-spark-delay,.06s) both}
+#pm-pet-desktop .pp-pet[data-activity=magic] .pp-wing.pp-right{top:40px;right:2px;width:13px;height:24px;transform:rotate(-28deg);animation:pp-cast-wing 1.2s cubic-bezier(.25,1,.5,1) both}
+#pm-pet-desktop .pp-pet[data-activity=magic] .pp-disc{animation:none}
+#pm-pet-desktop .pp-pet[data-activity=magic] .pp-disc.pp-left .pp-eye{animation:pp-wink 1.2s ease-in-out both}
+#pm-pet-desktop .pp-pet[data-activity=magic] .pp-cheek{transform:scale(1.15);opacity:1}
+#pm-pet-desktop .pp-lantern{left:60px;top:15px;width:22px;height:39px;z-index:7;transform-origin:50% 5px}
+#pm-pet-desktop .pp-lantern-handle{position:absolute;left:7px;top:0;width:8px;height:10px;border:2px solid var(--pp-wing);border-radius:50%}
+#pm-pet-desktop .pp-lantern-cap{position:absolute;left:2px;top:8px;width:18px;height:5px;background:var(--pp-wing);border-radius:4px 4px 1px 1px}
+#pm-pet-desktop .pp-lantern-light{position:absolute;left:3px;top:12px;width:16px;height:22px;background:var(--pp-chick);border:2px solid var(--pp-gold);border-radius:3px 3px 6px 6px;box-shadow:inset 3px 0 0 var(--pp-eye-white)}
+#pm-pet-desktop .pp-lantern-light::after{content:"";position:absolute;left:5px;top:4px;width:3px;height:10px;border-radius:50%;background:var(--pp-eye-white)}
+#pm-pet-desktop .pp-lantern-base{position:absolute;left:2px;top:33px;width:18px;height:4px;background:var(--pp-wing);border-radius:1px 1px 3px 3px}
+#pm-pet-desktop .pp-lantern-halo{position:absolute;left:-5px;top:6px;width:32px;height:34px;background:var(--pp-gold);border-radius:50%;opacity:.2}
+#pm-pet-desktop .pp-pet[data-activity=attention] .pp-lantern{display:block;animation:pp-lantern-lift .45s cubic-bezier(.22,1,.36,1) both,pp-lantern-sway 4.5s ease-in-out .45s infinite}
+#pm-pet-desktop .pp-pet[data-activity=attention] .pp-lantern-halo{animation:pp-lamp-glow 4.5s ease-in-out infinite}
+#pm-pet-desktop .pp-pet[data-activity=attention] .pp-owl{animation:pp-look-up .45s cubic-bezier(.22,1,.36,1) both}
+#pm-pet-desktop .pp-pet[data-activity=attention] .pp-wing.pp-right{top:30px;right:-1px;transform:rotate(-46deg)}
+#pm-pet-desktop .pp-pet[data-activity=attention] .pp-eye{animation:pp-wait-eyes 6s ease-in-out infinite}
+#pm-pet-desktop .pp-pet[data-activity=attention] .pp-brow{opacity:.8;transform:translateY(-2px) rotate(-14deg)}
+#pm-pet-desktop .pp-pet[data-activity=attention] .pp-disc.pp-right .pp-brow{transform:translateY(-3px) rotate(12deg)}
+#pm-pet-desktop .pp-pet[data-activity=attention] .pp-beak{transform:rotate(45deg) scaleY(1.12)}
+#pm-pet-desktop .pp-pet[data-activity=complete] .pp-eye{transform:scaleY(.7)}
+#pm-pet-desktop .pp-attention .pp-baby,#pm-pet-desktop .pp-attention .pp-baby *{animation-play-state:paused!important}
+#pm-pet-desktop .pp-help{font-size:12px;color:var(--pp-muted);margin-top:10px;min-height:18px}
+#pm-pet-desktop .pp-live{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+#pm-pet-desktop [hidden]{display:none!important}
+@keyframes pp-breathe{0%,100%{transform:translateY(0) scaleY(1)}50%{transform:translateY(-2px) scaleY(1.025)}}
+@keyframes pp-blink{0%,43%,47%,100%{transform:scaleY(1)}45%{transform:scaleY(.12)}}
+@keyframes pp-think{0%,100%{transform:rotate(0)}30%,55%{transform:rotate(-6deg) translateY(-1px)}}
+@keyframes pp-inspect{0%,100%{translate:-1px 0}50%{translate:1px 0}}
+@keyframes pp-celebrate{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
+@keyframes pp-hatch{0%{transform:scale(.7);opacity:0}15%{transform:rotate(-9deg);opacity:1}28%{transform:rotate(9deg)}42%{transform:rotate(-5deg)}60%,100%{transform:rotate(0)}}
+@keyframes pp-emerge{0%,28%{opacity:0;transform:translateY(10px) scale(.5)}48%{opacity:1;transform:translateY(-4px) scale(.9)}100%{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes pp-shell-open{0%,28%{opacity:1;transform:translateY(0) rotate(0)}70%,100%{opacity:0;transform:translate(8px,-18px) rotate(28deg)}}
+@keyframes pp-shell-drop{0%,40%{opacity:1;transform:translateY(0)}85%,100%{opacity:0;transform:translateY(5px) scale(.85)}}
+@keyframes pp-fledge{0%{transform:translate(0,0) scale(1);opacity:1}34%{transform:translate(0,-2px) scale(1.28);opacity:1}58%{transform:translate(4px,-10px) scale(1.28) rotate(-6deg);opacity:1}100%{transform:translate(20px,-38px) scale(.7) rotate(8deg);opacity:0}}
+@keyframes pp-flutter{0%,100%{transform:rotate(-55deg)}50%{transform:rotate(50deg)}}
+@keyframes pp-done{0%{opacity:0}20%,60%{opacity:1}100%{opacity:0}}
+@keyframes pp-panel-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pp-book-rock{0%,100%{transform:rotate(-1deg)}50%{transform:rotate(1deg) translateY(1px)}}
+@keyframes pp-page-turn{0%,54%{transform:skewY(-8deg) scaleX(1)}65%{transform:skewY(0) scaleX(.08)}79%,92%{transform:skewY(8deg) scaleX(-1)}100%{transform:skewY(-8deg) scaleX(1)}}
+@keyframes pp-read-eyes{0%,100%{transform:translate(-1px,3px) scaleY(.85)}35%,55%{transform:translate(2px,3px) scaleY(.85)}64%{transform:translate(0,2px) scaleY(.12)}73%{transform:translate(-1px,3px) scaleY(.85)}}
+@keyframes pp-turn-wing{0%,52%,100%{transform:rotate(42deg)}65%,79%{transform:translate(-5px,-3px) rotate(63deg)}}
+@keyframes pp-cast{0%,100%{transform:translateY(0) rotate(0)}20%{transform:translateY(1px) rotate(-5deg)}48%,70%{transform:translateY(-3px) rotate(3deg)}}
+@keyframes pp-wand-swish{0%,100%{transform:rotate(24deg)}20%{transform:rotate(-15deg)}47%,68%{transform:rotate(31deg)}}
+@keyframes pp-cast-wing{0%,100%{transform:rotate(-28deg)}22%{transform:rotate(-10deg)}47%,68%{transform:rotate(-30deg)}}
+@keyframes pp-sparkle{0%,18%{opacity:0;transform:translate(7px,12px) scale(.2) rotate(-30deg)}42%,68%{opacity:1;transform:translate(0,0) scale(1) rotate(0)}100%{opacity:0;transform:translate(-4px,-5px) scale(.5) rotate(35deg)}}
+@keyframes pp-wink{0%,100%{transform:scaleY(1)}25%,66%{transform:scaleY(.13)}78%{transform:scaleY(1)}}
+@keyframes pp-lantern-lift{from{opacity:0;transform:translateY(12px) rotate(12deg)}to{opacity:1;transform:translateY(0) rotate(0)}}
+@keyframes pp-lantern-sway{0%,100%{transform:rotate(-3deg)}50%{transform:rotate(3deg)}}
+@keyframes pp-lamp-glow{0%,100%{opacity:.18;transform:scale(.9)}50%{opacity:.32;transform:scale(1.05)}}
+@keyframes pp-look-up{from{transform:rotate(0)}to{transform:rotate(-3deg)}}
+@keyframes pp-wait-eyes{0%,100%{transform:translate(0,-1px)}45%,65%{transform:translate(1px,-2px)}75%{transform:translate(1px,-2px) scaleY(.12)}80%{transform:translate(0,-1px)}}
+@media(prefers-reduced-motion:reduce){#pm-pet-desktop .pp-pet *,#pm-pet-desktop .pp-panel{animation:none!important}#pm-pet-desktop .pp-progress-fill{transition:none}#pm-pet-desktop .pp-pet[data-activity=reading] .pp-eye{transform:translateY(3px) scaleY(.85)}#pm-pet-desktop .pp-pet[data-activity=reading] .pp-wing.pp-right{transform:rotate(42deg)}#pm-pet-desktop .pp-pet[data-activity=magic] .pp-spark{opacity:1}#pm-pet-desktop .pp-pet[data-activity=magic] .pp-disc.pp-left .pp-eye{transform:scaleY(.13)}}
+@media(pointer:coarse){#pm-pet-desktop .pp-close,#pm-pet-desktop .pp-window-hide,#pm-pet-desktop .pp-unavailable-hide{min-width:32px;min-height:36px}#pm-pet-desktop .pp-usage-restore,#pm-pet-desktop .pp-return{min-height:44px}}
+</style>
+<div class="pp-caption"><span data-copy="preview">Interaction preview</span><div class="pp-caption-actions"><button type="button" class="pp-demo-lifecycle">Preview subagents</button><span data-copy="example">Example project &amp; usage</span></div></div>
+<div class="pp-preview-controls" aria-label="Preview states"><button type="button" data-preview="building" aria-pressed="true">Build progress</button><button type="button" data-preview="waiting" aria-pressed="false">Needs you</button><button type="button" class="pp-advance">Advance demo</button></div>
+<div class="pp-scene">
+  <span class="pp-corner" data-copy="desktop">Desktop corner</span>
+  <section class="pp-panel" id="pm-pet-progress-panel" aria-label="Build progress" hidden>
+    <div class="pp-header"><span data-copy="project">Registration app</span><div class="pp-header-right"><span data-status>Building</span><button class="pp-close" type="button" aria-label="Hide panel">×</button></div></div>
+    <div class="pp-title">Building the signup flow</div>
+    <div class="pp-progress"><div class="pp-progress-meta"><span class="pp-progress-count" aria-live="polite">2 of 5 steps done</span><span class="pp-progress-percent">40%</span></div><div class="pp-progress-track" role="progressbar" aria-label="Roadmap completion" aria-valuemin="0" aria-valuemax="100" aria-valuenow="40"><span class="pp-progress-fill"></span></div><div class="pp-sync-note" hidden></div></div>
+    <details class="pp-road"><summary>View roadmap</summary><ol></ol></details>
+    <div class="pp-question" hidden><span class="pp-question-label">Your decision</span><p data-copy="question">When all spots are taken, close registration or open a waitlist?</p><button class="pp-return" type="button" data-copy="answer">Answer in Codex ↗</button></div>
+    <details class="pp-settings"><summary>Appearance</summary>
+      <label class="pp-usage-setting"><input type="checkbox" class="pp-usage-toggle" checked><span data-copy="usageToggle">Show usage below pet</span></label>
+      <label class="pp-size-control"><span class="pp-size-label">Pet size</span><input class="pp-size-input" type="range" min="75" max="150" step="5" value="100" aria-label="Pet size"><output class="pp-size-value">100%</output></label>
+    </details>
+  </section>
+  <span class="pp-needed" hidden>! Needs you</span>
+  <span class="pp-update-dot" hidden aria-hidden="true" data-tooltip="Progress updated"></span>
+  <button class="pp-pet" type="button" aria-label="Toggle progress. Drag to move. Double-click to return to Codex." aria-expanded="false" aria-controls="pm-pet-progress-panel">
+    <span class="pp-shadow" aria-hidden="true"></span>
+    <span class="pp-owl" aria-hidden="true">
+      <span class="pp-tuft pp-left"></span><span class="pp-tuft pp-right"></span><span class="pp-belly"></span><span class="pp-feathers"><span></span><span></span><span></span></span>
+      <span class="pp-disc pp-left"><span class="pp-eye"></span><span class="pp-brow"></span></span><span class="pp-disc pp-right"><span class="pp-eye"></span><span class="pp-brow"></span></span>
+      <span class="pp-cheek pp-left"></span><span class="pp-cheek pp-right"></span><span class="pp-beak"></span><span class="pp-wing pp-left"></span><span class="pp-wing pp-right"></span><span class="pp-foot pp-left"></span><span class="pp-foot pp-right"></span>
+      <span class="pp-book"><span class="pp-book-leaf"></span><span class="pp-book-leaf pp-right"></span><span class="pp-book-page"></span><span class="pp-book-ribbon"></span></span>
+      <span class="pp-magic"><span class="pp-wand"></span><span class="pp-spark"></span><span class="pp-spark"></span><span class="pp-spark"></span></span>
+      <span class="pp-lantern"><span class="pp-lantern-halo"></span><span class="pp-lantern-handle"></span><span class="pp-lantern-cap"></span><span class="pp-lantern-light"></span><span class="pp-lantern-base"></span></span>
+    </span>
+    <span class="pp-baby" data-agent="one" data-phase="none" aria-hidden="true" hidden><span class="pp-chick"><span class="pp-chick-eyes"></span><span class="pp-chick-beak"></span><span class="pp-chick-wing"></span><span class="pp-chick-wing pp-right"></span><span class="pp-chick-feet"></span></span><span class="pp-shell pp-shell-top"></span><span class="pp-shell pp-shell-bottom"></span><span class="pp-baby-done">✓</span></span>
+    <span class="pp-baby" data-agent="two" data-phase="none" aria-hidden="true" hidden><span class="pp-chick"><span class="pp-chick-eyes"></span><span class="pp-chick-beak"></span><span class="pp-chick-wing"></span><span class="pp-chick-wing pp-right"></span><span class="pp-chick-feet"></span></span><span class="pp-shell pp-shell-top"></span><span class="pp-shell pp-shell-bottom"></span><span class="pp-baby-done">✓</span></span>
+  </button>
+  <div class="pp-usage-dock" aria-label="Example Codex account usage">
+    <div class="pp-usage-row">
+      <span class="pp-usage-pill" data-window="five" hidden><span data-copy="five">5h left</span><strong>68%</strong><button class="pp-window-hide" type="button" data-hide="five" aria-label="Hide 5h quota">×</button></span>
+      <span class="pp-usage-pill" data-window="week"><span data-copy="week">Weekly left</span><strong>82%</strong><button class="pp-window-hide" type="button" data-hide="week" aria-label="Hide weekly quota">×</button></span>
+    </div>
+    <div class="pp-unavailable" hidden><span data-copy="unavailable">Usage unavailable</span><button class="pp-unavailable-hide" type="button" aria-label="Hide usage">×</button></div>
+    <button class="pp-usage-restore" type="button" hidden data-copy="restore">Show usage</button>
+  </div>
+</div>
+<div class="pp-help" aria-live="polite">Drag to move · Click for progress · Double-click to return</div>
+<span class="pp-live" role="status" aria-live="polite"></span>
+<script>
+(function(){
+ const root=document.getElementById('pm-pet-desktop');
+ const scene=root.querySelector('.pp-scene');
+ const pet=root.querySelector('.pp-pet');
+ const panel=root.querySelector('.pp-panel');
+ const dock=root.querySelector('.pp-usage-dock');
+ const restoreButton=root.querySelector('.pp-usage-restore');
+ const masterUsage=root.querySelector('.pp-usage-toggle');
+ const help=root.querySelector('.pp-help');
+ const needed=root.querySelector('.pp-needed');
+ const sizeInput=root.querySelector('.pp-size-input');
+ const state={open:true,language:'en',taskState:'building',petSize:100,subagentOne:'none',subagentTwo:'none',showUsage:true,fiveVisible:true,weekVisible:true,accountProfile:'weekly',fiveRemaining:68,weekRemaining:82,roadmapScope:'core'};
+ const copy={en:{preview:'Interaction preview',example:'Example project & usage',desktop:'Desktop corner',project:'Registration app',question:'When all spots are taken, close registration or open a waitlist?',answer:'Answer in Codex ↗',five:'5h left',week:'Weekly left',usageToggle:'Show usage below pet',restore:'Show usage',unavailable:'Usage unavailable',hideFive:'Hide 5h quota',hideWeek:'Hide weekly quota',hideUsage:'Hide usage',needs:'! Needs you',hide:'Hide panel',pet:'Toggle progress. Drag to move. Double-click to return to Codex.',help:'Drag to move · Click for progress · Double-click to return',jump:'Preview only: this would reopen the linked Codex conversation.',phases:['Plan','Build','Check'],status:{idle:'Idle',planning:'Planning',building:'Building',checking:'Checking',waiting:'Paused',complete:'Complete'},tasks:{idle:'No active build',planning:'Planning the signup flow',building:'Building the signup flow',checking:'Checking the signup flow',waiting:'Signup flow — waiting for you',complete:'Signup flow ready to review'}},zh:{preview:'交互示意',example:'示例项目与额度',desktop:'桌面角落',project:'报名工具',question:'名额满了以后，关闭报名，还是进入候补？',answer:'回到 Codex 回答 ↗',five:'5 小时剩余',week:'本周剩余',usageToggle:'在 Pet 下方显示额度',restore:'恢复额度显示',unavailable:'额度暂不可用',hideFive:'隐藏 5 小时额度',hideWeek:'隐藏周额度',hideUsage:'隐藏额度',needs:'! 需要你回答',hide:'隐藏浮层',pet:'切换进度浮层；拖动移动；双击回到 Codex',help:'拖动移动 · 单击查看进度 · 双击回到对话',jump:'仅作示意：这里会打开对应的 Codex 原对话。',phases:['计划','构建','验证'],status:{idle:'空闲',planning:'规划中',building:'构建中',checking:'验证中',waiting:'已暂停',complete:'已完成'},tasks:{idle:'目前没有构建任务',planning:'正在规划报名流程',building:'正在实现报名流程',checking:'正在验证报名流程',waiting:'报名流程 · 等待你回答',complete:'报名流程已可查看'}}};
+ let x=0,y=0,started=false,drag=null,clickTimer=null,suppressUntil=0,beforeClickOpen=null;
+ const completedSteps=new Set(['scope','layout']);
+ const plannedSteps=[{id:'scope',en:'Agree the project scope',zh:'确认项目范围'},{id:'layout',en:'Design the signup page',zh:'设计报名页面'},{id:'form',en:'Connect the signup form',zh:'接通报名表单'},{id:'capacity',en:'Handle full capacity',zh:'实现满额后的处理'},{id:'verify',en:'Verify the full signup flow',zh:'验证完整报名流程'}];
+ let renderedScope='core',renderedTaskState='building';
+ let observedProgress=null,unreadProgress=false,planChange=null,feedbackTimer=null;
+ const progressDot=root.querySelector('.pp-update-dot');
+ function syncActivity(){
+  pet.dataset.activity=state.taskState==='waiting'?'attention':pet.classList.contains('pp-progress-update')?'magic':state.taskState==='building'?'reading':state.taskState;
+ }
+ function stopProgressFeedback(){
+  clearTimeout(feedbackTimer);feedbackTimer=null;pet.classList.remove('pp-progress-update');
+ }
+ function celebrateProgress(){
+  stopProgressFeedback();syncActivity();void pet.offsetWidth;
+  pet.classList.add('pp-progress-update');syncActivity();
+  feedbackTimer=setTimeout(function(){stopProgressFeedback();syncActivity();},1200);
+ }
+ function roadmap(){
+  const steps=plannedSteps.slice();
+  if(state.roadmapScope==='waitlist')steps.splice(4,0,{id:'waitlist',en:'Add the waitlist flow',zh:'增加候补流程'});
+  return steps;
+ }
+ function chooseDemoPhase(value){
+  const steps=roadmap();
+  if(value==='planning'||value==='idle')completedSteps.clear();
+  if(value==='checking'||value==='complete')steps.forEach(function(step){if(value==='complete'||step.id!=='verify')completedSteps.add(step.id);else completedSteps.delete(step.id);});
+  if(value==='building'&&(steps.every(function(step){return completedSteps.has(step.id);})||completedSteps.size===0)){
+   completedSteps.clear();completedSteps.add('scope');completedSteps.add('layout');
+  }
+  state.taskState=value;
+ }
+ function renderRoadmap(){
+  const steps=roadmap(),zh=state.language==='zh',done=steps.filter(function(step){return completedSteps.has(step.id);}).length;
+  const current=steps.find(function(step){return !completedSteps.has(step.id);}),waiting=state.taskState==='waiting';
+  const percent=Math.round(done/steps.length*100),count=zh?done+' / '+steps.length+' 项已完成':done+' of '+steps.length+' steps done';
+  const snapshot={plan:steps.map(function(step){return step.id;}).join('|'),done:steps.filter(function(step){return completedSteps.has(step.id);}).map(function(step){return step.id;}).join('|'),total:steps.length,phase:state.taskState};
+  const changed=observedProgress&&(snapshot.plan!==observedProgress.plan||snapshot.done!==observedProgress.done||snapshot.phase!==observedProgress.phase);
+  const newlyCompleted=observedProgress&&snapshot.plan===observedProgress.plan&&steps.some(function(step){return completedSteps.has(step.id)&&!observedProgress.done.split('|').includes(step.id);});
+  if(observedProgress&&snapshot.plan!==observedProgress.plan)planChange={before:observedProgress.total,after:steps.length};
+  if(changed){
+   if(!state.open)unreadProgress=true;
+   stopProgressFeedback();
+   if(newlyCompleted&&!waiting&&state.taskState!=='idle')celebrateProgress();
+  }
+  observedProgress=snapshot;if(state.open)unreadProgress=false;
+  if(waiting)stopProgressFeedback();
+  syncActivity();
+  progressDot.hidden=!unreadProgress||waiting;progressDot.setAttribute('data-tooltip',zh?'进度已更新':'Progress updated');
+  const note=root.querySelector('.pp-sync-note');note.hidden=!planChange;
+  if(planChange)note.textContent=zh?'计划已更新 · '+planChange.before+' → '+planChange.after+' 项':'Plan updated · '+planChange.before+' → '+planChange.after+' steps';
+  const countEl=root.querySelector('.pp-progress-count');if(countEl.textContent!==count)countEl.textContent=count;
+  root.querySelector('.pp-progress-percent').textContent=percent+'%';
+  const track=root.querySelector('.pp-progress-track');track.setAttribute('aria-valuenow',String(percent));track.setAttribute('aria-valuetext',count+(waiting?(zh?'，等待你的决定':', waiting for your decision'):''));
+  root.querySelector('.pp-progress-fill').style.width=percent+'%';
+  root.querySelector('.pp-progress').hidden=state.taskState==='idle';
+  root.querySelector('.pp-road').hidden=state.taskState==='idle';root.querySelector('.pp-road summary').textContent=zh?'查看路线图':'View roadmap';
+  const list=root.querySelector('.pp-road ol');list.replaceChildren();
+  steps.forEach(function(step){
+   const status=completedSteps.has(step.id)?'done':current&&step.id===current.id?(waiting?'blocked':'current'):'pending';
+   const li=document.createElement('li'),mark=document.createElement('span'),label=document.createElement('span');
+   li.className='pp-step';li.dataset.step=step.id;li.dataset.status=status;mark.className='pp-step-mark';mark.setAttribute('aria-hidden','true');
+   mark.textContent=status==='done'?'✓':status==='blocked'?'!':status==='current'?'●':'○';label.textContent=step[zh?'zh':'en'];
+   li.setAttribute('aria-label',label.textContent+' — '+({done:zh?'已完成':'Done',blocked:zh?'等待你':'Waiting for you',current:zh?'进行中':'In progress',pending:zh?'待开始':'Not started'})[status]);
+   li.append(mark,label);list.append(li);
+  });
+  if(current&&state.taskState!=='idle')root.querySelector('.pp-title').textContent=(waiting?(zh?'等待决定：':'Decision needed: '):'')+current[zh?'zh':'en'];
+  const next=root.querySelector('.pp-advance');next.disabled=waiting||state.taskState==='idle'||!current;
+  next.textContent=waiting?(zh?'演示已暂停':'Demo paused'):!current?(zh?'演示已完成':'Demo complete'):(zh?'推进演示一步':'Advance demo');
+ }
+ function advanceDemo(){
+  if(state.taskState==='waiting'||state.taskState==='idle')return;
+  const step=roadmap().find(function(item){return !completedSteps.has(item.id);});if(!step)return;
+  completedSteps.add(step.id);
+  const next=roadmap().find(function(item){return !completedSteps.has(item.id);});
+  state.taskState=!next?'complete':next.id==='verify'?'checking':'building';render();
+ }
+ const motionPreference=matchMedia('(prefers-reduced-motion: reduce)');
+ const babies=[{id:'one',key:'subagentOne',applied:'none'},{id:'two',key:'subagentTwo',applied:'none'}].map(function(b){b.el=root.querySelector('[data-agent="'+b.id+'"]');return b;});
+ const demoButton=root.querySelector('.pp-demo-lifecycle');
+ const lifeCopy={en:{preview:'Preview subagents',replay:'Replay animation',paused:'Resume to preview',started:'started a task',done:'completed its task'},zh:{preview:'预览雏鸟动画',replay:'重新播放动画',paused:'恢复构建后预览',started:'开始了任务',done:'完成了任务'}};
+ let demoTimers=[],demoRunning=false,demoGeneration=0;
+ function stopDemo(){demoGeneration++;demoTimers.forEach(clearTimeout);demoTimers=[];demoRunning=false;}
+ function setBabyPhase(b,phase){
+  if(phase==='hatching'){b.el.dataset.phase='none';b.el.hidden=true;void b.el.offsetWidth;}
+  b.el.dataset.phase=phase;b.el.hidden=phase==='none';
+  if(phase==='hatching'||phase==='leaving'||(motionPreference.matches&&phase==='working')){
+   const t=lifeCopy[state.language]||lifeCopy.en;
+   root.querySelector('.pp-live').textContent='Subagent '+(b.id==='one'?'1':'2')+' '+(phase==='leaving'?t.done:t.started);
+  }
+ }
+ function syncBabies(){
+  if(state.taskState==='waiting')return;
+  babies.forEach(function(b){
+   const desired=state[b.key];
+   if(desired===b.applied)return;
+   const previous=b.el.dataset.phase;b.applied=desired;
+   if(desired==='working')setBabyPhase(b,motionPreference.matches?'working':'hatching');
+   else if(desired==='complete'&&previous!=='none'){
+    setBabyPhase(b,'leaving');
+    if(motionPreference.matches)setBabyPhase(b,'none');
+   }else setBabyPhase(b,'none');
+  });
+ }
+ babies.forEach(function(b){b.el.addEventListener('animationend',function(e){
+  if(e.target!==b.el||state.taskState==='waiting')return;
+  if(e.animationName==='pp-hatch'&&b.el.dataset.phase==='hatching')setBabyPhase(b,'working');
+  if(e.animationName==='pp-fledge'&&b.el.dataset.phase==='leaving')setBabyPhase(b,'none');
+  place();
+ });});
+ motionPreference.addEventListener('change',render);
+ function previewSubagents(){
+  if(state.taskState==='waiting')return;
+  stopDemo();
+  state.subagentOne='none';state.subagentTwo='none';syncBabies();
+  if(state.taskState==='complete'||state.taskState==='idle')chooseDemoPhase('building');
+  demoRunning=true;const generation=demoGeneration;
+  state.subagentOne='working';render();
+  function schedule(delay,fn){demoTimers.push(setTimeout(function(){
+   if(generation!==demoGeneration||!root.isConnected)return;
+   fn();render();
+  },delay));}
+  schedule(650,function(){state.subagentTwo='working';});
+  schedule(3400,function(){state.subagentOne='complete';});
+  schedule(4450,function(){state.subagentTwo='complete';});
+  schedule(5650,function(){demoRunning=false;});
+ }
+ function clamp(v,lo,hi){return Math.max(lo,Math.min(v,Math.max(lo,hi)));}
+ function availableWindows(){return {both:['five','week'],weekly:['week'],five:['five'],unavailable:[]}[state.accountProfile]||[];}
+ function displayPercent(value){return typeof value==='number'&&Number.isFinite(value)?Math.round(clamp(value,0,100)):null;}
+ function tone(value){return value===null?'unknown':value<=20?'low':value<=69?'mid':'high';}
+ function renderUsage(t){
+  const offered=availableWindows();
+  let visibleCount=0;
+  ['five','week'].forEach(function(key){
+   const el=root.querySelector('[data-window="'+key+'"]');
+   const available=offered.includes(key);
+   const visible=available&&state.showUsage&&state[key+'Visible'];
+   el.hidden=!visible;
+   if(visible)visibleCount++;
+   const value=available?displayPercent(state[key+'Remaining']):null;
+   el.querySelector('strong').textContent=value===null?'—':String(value)+'%';
+   el.dataset.tone=tone(value);
+   el.querySelector('button').setAttribute('aria-label',key==='five'?t.hideFive:t.hideWeek);
+  });
+  root.querySelector('.pp-usage-row').hidden=visibleCount===0;
+  root.querySelector('.pp-unavailable').hidden=!(state.showUsage&&offered.length===0);
+  root.querySelector('.pp-unavailable-hide').setAttribute('aria-label',t.hideUsage);
+  restoreButton.hidden=state.showUsage&&(offered.length===0||visibleCount===offered.length);
+  masterUsage.checked=state.showUsage&&(offered.length===0||visibleCount===offered.length);
+  masterUsage.indeterminate=state.showUsage&&visibleCount>0&&visibleCount<offered.length;
+ }
+ function place(){
+  const hasBabies=babies.some(function(b){return !b.el.hidden;});
+  const scale=state.petSize/100,petWidth=92*scale,petHeight=104*scale;
+  const gap=state.taskState==='waiting'?needed.offsetHeight+22:18;
+  const bottomSpace=petHeight+6+dock.offsetHeight+17;
+  scene.style.minHeight=state.open?(panel.offsetHeight+gap+bottomSpace+12)+'px':'';
+  if(!started){x=scene.clientWidth-petWidth-56;y=scene.clientHeight-bottomSpace-19;started=true;}
+  x=clamp(x,12+(hasBabies?73*scale:0),scene.clientWidth-petWidth-12);
+  const topSpace=state.open?panel.offsetHeight+gap+12:Math.max(32,gap+12);
+  y=clamp(y,topSpace,scene.clientHeight-bottomSpace);
+  const dockLeft=clamp(x+petWidth/2-dock.offsetWidth/2,12,scene.clientWidth-dock.offsetWidth-12);
+  if(state.open){
+   const w=panel.offsetWidth,h=panel.offsetHeight;
+   const px=clamp(x+petWidth/2-w/2,12,scene.clientWidth-w-12),py=y-h-gap;
+   panel.style.left=px+'px';panel.style.top=py+'px';
+   panel.style.setProperty('--pp-tail-x',clamp(x+petWidth/2-px,24,w-24)+'px');
+  }
+  pet.style.left=x+'px';pet.style.top=y+'px';pet.style.transform='scale('+scale+')';
+  dock.style.left=dockLeft+'px';dock.style.top=(y+petHeight+6)+'px';
+  needed.style.left=clamp(x+petWidth/2-needed.offsetWidth/2,12,scene.clientWidth-needed.offsetWidth-12)+'px';
+  needed.style.top=(y-needed.offsetHeight-5)+'px';
+  progressDot.style.left=(x+petWidth-13)+'px';progressDot.style.top=(y+7)+'px';
+ }
+ function render(){
+  if(state.roadmapScope!==renderedScope){
+   completedSteps.delete('waitlist');completedSteps.delete('verify');renderedScope=state.roadmapScope;
+   if(state.taskState==='complete')state.taskState='building';
+  }
+  if(state.taskState!=='waiting'&&state.taskState!=='idle'){
+   const next=roadmap().find(function(step){return !completedSteps.has(step.id);});
+   state.taskState=!next?'complete':next.id==='scope'?'planning':next.id==='verify'?'checking':'building';
+  }
+  const t=copy[state.language]||copy.en,waiting=state.taskState==='waiting';
+  if(waiting&&demoRunning)stopDemo();
+  if(state.taskState==='complete'){
+   if(demoRunning)stopDemo();
+   babies.forEach(function(b){if(state[b.key]==='working')state[b.key]='complete';});
+  }
+  syncBabies();
+  if(motionPreference.matches&&!waiting)babies.forEach(function(b){
+   if(b.el.dataset.phase==='hatching')setBabyPhase(b,'working');
+   if(b.el.dataset.phase==='leaving')setBabyPhase(b,'none');
+  });
+  root.lang=state.language==='zh'?'zh-CN':'en';
+  root.querySelectorAll('[data-copy]').forEach(function(el){el.textContent=t[el.dataset.copy];});
+  panel.hidden=!state.open;
+  panel.dataset.waiting=String(waiting);
+  root.querySelector('.pp-question').hidden=!waiting;
+  root.querySelector('[data-status]').textContent=t.status[state.taskState];
+  root.querySelector('.pp-title').textContent=t.tasks[state.taskState];
+  root.querySelector('.pp-needed').hidden=!waiting;root.querySelector('.pp-needed').textContent=t.needs;
+  ['planning','building','checking','complete','attention'].forEach(function(name){pet.classList.toggle('pp-'+name,name===(waiting?'attention':state.taskState));});
+  renderRoadmap();
+  pet.setAttribute('aria-expanded',String(state.open));
+  pet.setAttribute('aria-label',state.language==='zh'?(state.open?'收起进度；拖动移动；双击回到 Codex':'显示进度；拖动移动；双击回到 Codex'):(state.open?'Hide build progress. Drag to move. Double-click to return to Codex.':'Show build progress. Drag to move. Double-click to return to Codex.'));
+  if(unreadProgress&&!waiting)pet.setAttribute('aria-label',(state.language==='zh'?'进度已更新。':'Progress updated. ')+pet.getAttribute('aria-label'));
+  root.querySelector('.pp-close').setAttribute('aria-label',t.hide);
+  const lt=lifeCopy[state.language]||lifeCopy.en;
+  const ui=state.language==='zh'?{size:'Pet 大小',decision:'需要你决定',building:'构建进度',waiting:'需要你介入'}:{size:'Pet size',decision:'Your decision',building:'Build progress',waiting:'Needs you'};
+  root.querySelector('.pp-size-label').textContent=ui.size;sizeInput.setAttribute('aria-label',ui.size);
+  sizeInput.value=String(state.petSize);root.querySelector('.pp-size-value').textContent=state.petSize+'%';
+  root.querySelector('.pp-question-label').textContent=ui.decision;
+  root.querySelector('.pp-settings summary').textContent=state.language==='zh'?'外观设置':'Appearance';
+  root.querySelectorAll('[data-preview]').forEach(function(el){el.textContent=ui[el.dataset.preview];el.setAttribute('aria-pressed',String(el.dataset.preview==='waiting'?waiting:state.taskState==='building'));});
+  demoButton.textContent=waiting?lt.paused:demoRunning?lt.replay:lt.preview;
+  demoButton.disabled=waiting;
+  renderUsage(t);help.textContent=state.open?t.help:state.language==='zh'?'点击猫头鹰重现进度 · 拖动移动 · 双击回到对话':'Click the owl to show progress · Drag to move · Double-click to return';place();renderedTaskState=state.taskState;
+ }
+ function restoreUsage(){state.showUsage=true;availableWindows().forEach(function(key){state[key+'Visible']=true;});render();}
+ function toggle(){state.open=!state.open;render();}
+ function closePanel(){clearTimeout(clickTimer);state.open=false;render();pet.focus({preventScroll:true});}
+ function demoReturn(){help.textContent=(copy[state.language]||copy.en).jump;}
+ pet.addEventListener('pointerdown',function(e){if(e.button!==0)return;drag={id:e.pointerId,startX:e.clientX,startY:e.clientY,x:x,y:y,moved:false};pet.setPointerCapture(e.pointerId);});
+ pet.addEventListener('pointermove',function(e){if(!drag||e.pointerId!==drag.id)return;const dx=e.clientX-drag.startX,dy=e.clientY-drag.startY;if(Math.hypot(dx,dy)>6)drag.moved=true;if(drag.moved){clearTimeout(clickTimer);pet.classList.add('pp-dragging');x=drag.x+dx;y=drag.y+dy;place();}});
+ function finishDrag(e){if(!drag||e.pointerId!==drag.id)return;if(drag.moved)suppressUntil=Date.now()+550;pet.classList.remove('pp-dragging');drag=null;}
+ pet.addEventListener('pointerup',finishDrag);pet.addEventListener('pointercancel',finishDrag);
+ pet.addEventListener('click',function(e){if(Date.now()<suppressUntil)return;clearTimeout(clickTimer);if(e.detail===0){toggle();return;}if(e.detail===1){beforeClickOpen=state.open;clickTimer=setTimeout(toggle,240);}});
+ pet.addEventListener('dblclick',function(){clearTimeout(clickTimer);if(Date.now()<suppressUntil)return;if(beforeClickOpen!==null){state.open=beforeClickOpen;beforeClickOpen=null;render();}demoReturn();});
+ pet.addEventListener('keydown',function(e){const steps={ArrowLeft:[-12,0],ArrowRight:[12,0],ArrowUp:[0,-12],ArrowDown:[0,12]};if(steps[e.key]){e.preventDefault();x+=steps[e.key][0];y+=steps[e.key][1];place();}});
+ root.querySelector('.pp-close').addEventListener('click',closePanel);
+ root.addEventListener('keydown',function(e){if(e.key==='Escape'&&state.open){e.preventDefault();e.stopPropagation();closePanel();}});
+ root.querySelector('.pp-settings').addEventListener('toggle',place);
+ root.querySelector('.pp-road').addEventListener('toggle',place);
+ root.querySelector('.pp-advance').addEventListener('click',advanceDemo);
+ root.querySelector('.pp-return').addEventListener('click',demoReturn);
+ demoButton.addEventListener('click',previewSubagents);
+ sizeInput.addEventListener('input',function(){
+  state.petSize=clamp(Number(sizeInput.value),75,150);render();
+ });
+ root.querySelectorAll('[data-preview]').forEach(function(el){el.addEventListener('click',function(){stopDemo();chooseDemoPhase(el.dataset.preview);state.open=true;render();});});
+ root.querySelectorAll('[data-hide]').forEach(function(el){el.addEventListener('click',function(){state[el.dataset.hide+'Visible']=false;render();});});
+ root.querySelector('.pp-unavailable-hide').addEventListener('click',function(){state.showUsage=false;render();});
+ restoreButton.addEventListener('click',restoreUsage);
+ masterUsage.addEventListener('change',function(e){if(e.target.checked)restoreUsage();else{state.showUsage=false;render();}});
+ render();new ResizeObserver(place).observe(scene);
+ if(globalThis.Tweak){
+  const tweak=new Tweak({container:root,onChange:function(){stopDemo();if(state.taskState!==renderedTaskState)chooseDemoPhase(state.taskState);render();}});
+  tweak.addSelect(state,'taskState',{label:'Task state / animation',options:[{label:'Idle — breathing',value:'idle'},{label:'Planning — thinking',value:'planning'},{label:'Building — reading',value:'building'},{label:'Checking — inspecting',value:'checking'},{label:'Needs you — yellow lantern',value:'waiting'},{label:'Complete — celebration',value:'complete'}]});
+  tweak.addToggle(state,'open',{label:'Show floating panel'});
+  tweak.addSelect(state,'roadmapScope',{label:'Roadmap example',options:[{label:'Core signup — 5 steps',value:'core'},{label:'With waitlist — 6 steps',value:'waitlist'}]});
+  tweak.addSelect(state,'accountProfile',{label:'Account quotas',options:[{label:'5h + weekly',value:'both'},{label:'Weekly only',value:'weekly'},{label:'5h only',value:'five'},{label:'Usage unavailable',value:'unavailable'}]});
+  tweak.addSlider(state,'fiveRemaining',{label:'5h remaining',min:0,max:100,step:.5,unit:'%'});
+  tweak.addSlider(state,'weekRemaining',{label:'Weekly remaining',min:0,max:100,step:.5,unit:'%'});
+  const agentOptions=[{label:'Not spawned',value:'none'},{label:'Working — hatch',value:'working'},{label:'Completed — grow & fly',value:'complete'}];
+  tweak.addSelect(state,'subagentOne',{label:'Subagent 1',options:agentOptions});
+  tweak.addSelect(state,'subagentTwo',{label:'Subagent 2',options:agentOptions});
+  tweak.addSelect(state,'language',{label:'Interface language',options:[{label:'English',value:'en'},{label:'简体中文',value:'zh'}]});
+ }
+})();
+</script>
+</div>
