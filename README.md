@@ -6,9 +6,27 @@ Keep the plan visible, return to the decisions that need you, and see your avail
 
 ![PM Pet: an owl companion with a visual roadmap, a human decision prompt, and sample account quota.](docs/assets/pm-pet-hero.svg)
 
-[Install](#install) · [How it works](#how-it-works) · [Controls](#controls) · [Current limits](#current-limits) · [Contribute](CONTRIBUTING.md)
+[Start each new task](#start-each-new-codex-task) · [Install](#install) · [How it works](#how-it-works) · [Controls](#controls) · [Current limits](#current-limits) · [Contribute](CONTRIBUTING.md)
 
 **Source preview · 0.1.0-alpha.1 · macOS 13+ · Codex Desktop · [MIT](LICENSE)**
+
+## Start each new Codex task
+
+[Install once](#install), then **explicitly enable PM Pet at the beginning of every new root Codex task you want it to follow**. This includes new tasks in a project folder you have used before. Each conversation opts in separately.
+
+If you installed the skill with `--with-skill`, start the task with:
+
+> Use $pm-pet to enable a Pet for this conversation, named “My build”. Check my current Codex usage once to initialize quota updates. Clarify important choices before building, then keep its roadmap updated as we work.
+
+For a command-only installation, ask Codex to run this **inside that root task**:
+
+```sh
+~/.local/bin/pm-pet enable --title "My build"
+```
+
+After enabling, ask Codex to check your current usage once with its Desktop usage-limits tool. This supplies the account check needed for conditional automatic quota updates; enabling Pet alone does not verify the quota account.
+
+**`enable` binds or re-enables the current conversation. `start` reopens saved, enabled Pets.** Running `pm-pet start` does not bind a new task or re-enable a disabled Pet. Pets follow conversation IDs, not project folders; installing or starting the app does not enable all chats or add a startup item.
 
 ## Why PM Pet?
 
@@ -37,6 +55,8 @@ The illustrations above use sample tasks and quota values.
 
 You need **macOS 13 or later**, **Python 3.9+**, **Git**, Apple's command-line developer tools, and **Codex Desktop with local conversations**. This version builds on your Mac; there is no signed, notarized app download yet. The native interface has been tested on macOS 26.6.2 / Apple silicon. macOS 13 is the deployment target; earlier macOS releases and Intel have not been verified.
 
+For automatic quota updates only, also install Codex CLI with a matching ChatGPT file-based login (tested with CLI `0.148.0`). This is optional for Pet's roadmap and reminder features.
+
 If Apple's developer tools are missing, install them with `xcode-select --install`. Then:
 
 ```sh
@@ -51,11 +71,11 @@ For another command prefix, installation without the skill, removal, and diagnos
 
 ### Enable it in Codex
 
-Open the task you want to co-build in. If the newly installed skill is not listed, open a new task. Ask:
+Repeat this in each new root task you want to co-build in. The `$pm-pet` recipe requires the optional skill installed with `--with-skill`; if that newly installed skill is not listed, open a new task. Ask:
 
-> Use $pm-pet to enable a Pet for this conversation, named “My build”. Keep its roadmap updated as we work. Before building, ask me about any unresolved choice that would materially change the product, experience, time, or cost. Wait for my answer at those points, then review the plan and continue.
+> Use $pm-pet to enable a Pet for this conversation, named “My build”. Check my current Codex usage once to initialize quota updates. Keep its roadmap updated as we work. Before building, ask me about any unresolved choice that would materially change the product, experience, time, or cost. Wait for my answer at those points, then review the plan and continue.
 
-You can also ask Codex to run this in the owning task:
+For a command-only installation, or direct use, ask Codex to run this in the owning task:
 
 ```sh
 ~/.local/bin/pm-pet enable --title "My build"
@@ -119,7 +139,11 @@ The display shows **remaining**, shared account quota—not consumption attribut
 - Hidden quota can be restored from the menu.
 - The line below the pills shows **remaining** quota and the snapshot's age. After five minutes, **Cached** and an asterisk mark an old figure. Repainting does not make it fresh.
 
-Pet reads recorded general Codex usage and successful Desktop account-usage queries in an enabled conversation. Ask Codex to check your current usage limits to update it; Pet picks up the completed query and keeps Spark's separate allowance out of the general total. This is **not automatic API polling**. Aging the display does not make extra model or network calls.
+**After enabling Pet, ask Codex to check current usage once.** Pet observes the genuine Desktop result and verifies that its local CLI account matches that last Desktop account check. When that check succeeds and quota is visible, one shared background worker reads usage directly: every **60 seconds during confirmed running work**, or **5 minutes while idle or awaiting your reply**, scheduled after a successful read. Refreshes do not send model prompts. Hiding all quota displays or disabling all Pets stops polling and cancels an in-flight read.
+
+**Auto** identifies the matched CLI source. **Checking**, **Retry**, and **Account check needed** describe refresh status. A failed read backs off while preserving the previous value's real age; an account mismatch makes quota unavailable. The percentage can stay unchanged after a successful read—the timestamp shows that it was checked again. General quota remains separate from Spark's allowance.
+
+This match is to the **last Desktop check**, not a permanent live connection to Desktop identity. File-based CLI login metadata must be available; keychain-only or unmatched accounts do not enable automatic reads. If the account changes or a check is needed, check usage again in Codex. Pet keeps no raw account IDs, tokens, or credit balances in its state. See [the account and refresh details](docs/LOCAL-INTEGRATION.md#quota-sources-and-automatic-refresh).
 
 ## Current limits
 

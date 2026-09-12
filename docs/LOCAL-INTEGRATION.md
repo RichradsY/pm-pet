@@ -12,7 +12,9 @@ python3 scripts/pm-pet.py enable --title "My build"
 
 The first run builds `build/PM Pet.app`, starts its local bridge, validates the current `CODEX_THREAD_ID` against session metadata, and waits for the corresponding native view to acknowledge rendering. Run this from the owning root conversation. From another shell, provide `--conversation <exact-uuid>`; a working directory or conversation title is not a binding.
 
-Runtime preferences, binding metadata, acknowledgements, and minimal state stay under this checkout's ignored `.pm-pet/runtime/`. The app reads only registered conversation transcripts through its bridge. It does not read authentication files. The helper can be called by absolute path from another conversation's workspace while retaining the same application/runtime.
+Runtime preferences, binding metadata, acknowledgements, and minimal state stay under this checkout's ignored `.pm-pet/runtime/`. The bridge observes only registered conversation transcripts. Its automatic quota reader also transiently reads file-based CLI login metadata to verify the account before a direct usage query; see the quota boundary below. The helper can be called by absolute path from another conversation's workspace while retaining the same application/runtime.
+
+After enabling, ask Codex to check current usage once with the Desktop usage-limits tool in that root task. The successful result seeds the account fingerprint required for conditional automatic quota reads. Repeat explicit Pet enable for each new root task you want to follow; starting the app only restores saved, enabled bindings.
 
 The operating system may require permission to launch the app from an agent sandbox. This is separate from changing the Codex sandbox configuration. After the app starts, helper commands use scoped local files and acknowledgements; they do not need process-list access.
 
@@ -47,12 +49,20 @@ python3 scripts/pm-pet.py doctor
 | Required information | Explicit red input reminder with its original Codex/system/terminal destination; no password field or automatic OS-prompt detection |
 | Question resolution | Automatic questions require matching replies to every item, then main-agent resolution with a full reviewed roadmap; explicit prompts require owner verification and matching resolution ID |
 | Child activity | Observed start/completion events; repeated interaction alone is not proof of a resumed child |
-| Account quota | General `codex` snapshots and completed Desktop `get_usage_limits` results from an enabled bound conversation, with source timestamp; missing 5h remains absent |
+| Account quota | Genuine Desktop checks and general `codex` snapshots, plus direct CLI account reads only after matching the last Desktop check; one shared worker and actual source timestamps; missing 5h remains absent |
 | Feedback wait | Persistent question/report gate plus an agent stop-before-asking workflow; optional trusted local-tool hook adds a guard. This observer cannot cancel already-running work |
 
-Quota is observed through the bound transcript, not an automatic polling API. Reading the transcript again does not make the quota fresh. General account windows are kept separate from model-specific quota buckets. A successful first-class `codex_app/get_usage_limits` completion updates the shared snapshot using that event's timestamp and the `rateLimitsByLimitId.codex` bucket; a missing/null map falls back to the legacy general bucket. Ask Codex to check current usage in an enabled task to get a fresh account read. Shell output and quoted JSON are not accepted as usage events. Account IDs, credit balances, and raw tool responses are not copied into Pet state.
+## Quota sources and automatic refresh
 
-A valid response with no supported general windows clears the old display to unavailable. A failed or malformed response retains the last good snapshot and its original time. After five minutes, the UI marks old numbers as cached; its age advances locally even when the build is idle. This fixes stale general usage when the transcript only emits newer model-specific token-count events.
+A successful first-class Desktop `get_usage_limits` completion in an enabled root conversation supplies a fresh snapshot and account evidence. The bridge hashes the result's `accountId`; shell output and quoted JSON cannot seed that match. General windows use `rateLimitsByLimitId.codex`, with the legacy general bucket used only when the map is missing/null. Model-specific buckets such as Spark do not replace the general allowance.
+
+The automatic reader uses direct Codex CLI App Server calls, including `account/read` and `account/rateLimits/read`, without a model prompt. Before starting a reader child, it compares a scoped hash of local `auth.json` → `tokens.account_id` with the last genuine Desktop account fingerprint. It pins the child to that verified `CODEX_HOME` and `cli_auth_credentials_store="file"`; it does not change the user's persistent Codex configuration. The account hash and auth-file generation must remain unchanged before and after the read. A replacement or modification, including a token refresh during the read, discards that result.
+
+This establishes **CLI identity matched to the last Desktop account check**, not permanent knowledge of the current Desktop login. The reader does not substitute email, decode tokens, or fall back to keychain-only/unmatched credentials. Ask Codex to check current usage again after an account change or an **Account check needed** status. Pet retains fingerprints and observation metadata, not raw account IDs, tokens, credit balances, auth-file contents, or raw tool responses.
+
+One shared worker serves all visible quota copies. With enabled Pets and at least one visible quota display, a successful read schedules the next check after 60 seconds during confirmed running work, or 300 seconds while idle or awaiting a reply. Running means an observed running turn without a pending question. Requests do not overlap. Hiding every quota display or disabling every Pet stops polling and cancels an in-flight read; progress observation remains separate. There is no Pet manual-refresh button or OS-wake hook.
+
+Transport failures back off and retain the previous value and its observation time. Account mismatch or unavailable authentication metadata makes quota unavailable. A successful read with no supported general windows also clears the display. Successful reads have their actual completion timestamp even when the percentage is unchanged. **Auto**, **Checking**, **Retry**, and **Account check needed** show source or refresh status. After five minutes, an asterisk marks old figures; relative age advances locally without fetching data or pretending the cache is fresh.
 
 An optional live diagnostic is available:
 
@@ -60,7 +70,7 @@ An optional live diagnostic is available:
 python3 bridge/quota_reader.py --probe
 ```
 
-It makes direct App Server calls without a model prompt and prints metadata only. Live reads were verified for the local CLI account, but that account cannot yet be reliably matched to the Desktop account from the available fields. Therefore this reader is not enabled as the Pet's automatic quota source. The proposed shared 60-second active / 5-minute idle refresh policy applies once that account binding is verified. No API polling is currently advertised as live Desktop usage.
+The standalone `--probe` makes direct App Server calls and prints metadata only. It remains an **unverified CLI-account diagnostic**: it does not establish the Desktop match, seed the automatic worker, or prove that its account is the Desktop account. The conditional worker uses the separate verified reader described above.
 
 ## Report the real roadmap
 
@@ -84,4 +94,4 @@ bash native/build.sh
 
 The native view is bundled locally and tested separately from the original browser design. The owl has a transparent silhouette; compact native glass surfaces hold its name, quota, and progress. Reduce Transparency uses an opaque system-color fallback. Planning, building, and checking show the reading animation. Integration was checked on this development Mac; distribution to other machines, two simultaneous real root conversations, skill hot-loading, restart behavior across Codex upgrades, and hard pause/resume require further validation before a consumer alpha release.
 
-Codex local transcript formats are not a stable public integration contract. This adapter isolates their parsing so an unsupported format can show unavailable rather than guess. See the official [App Server protocol](https://learn.chatgpt.com/docs/app-server) for the future direct event/account transport.
+Codex local transcript formats are not a stable public integration contract. This adapter isolates their parsing so an unsupported format can show unavailable rather than guess. Direct account reads use the [App Server protocol](https://learn.chatgpt.com/docs/app-server); conversation progress still uses the local observation/report path.
