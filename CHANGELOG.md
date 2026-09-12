@@ -3,6 +3,9 @@
 ## Unreleased
 
 - Native macOS app, authenticated private installation, and live Codex adapter are planned, not implemented.
+- Plan updated to one explicitly enabled Pet per conversation, including independent Pets in a shared project.
+- Defined conversation-based enable/disable, persistent character colors, parent-owned chicks, and independent build pause scopes.
+- Specified shared account quota refresh defaults and a staged native app implementation/acceptance plan. These are planned capabilities, not additions to the runnable prototype.
 
 ## 0.1.0-prototype.1 — 2026-09-12
 

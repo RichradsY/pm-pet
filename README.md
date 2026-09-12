@@ -20,6 +20,7 @@ Task progress, quota values, pauses, and navigation are demonstrations. Optional
 ## Product and development
 
 - [Product specification](docs/PRODUCT.md)
+- [Native app development plan](docs/APP-DEVELOPMENT.md)
 - [Installation and lifecycle plan](docs/INSTALLATION.md)
 - [Version and release workflow](docs/VERSIONING.md)
 - [Changelog](CHANGELOG.md)

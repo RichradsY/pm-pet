@@ -31,6 +31,7 @@ Command-line installation does not replace application signing and notarization.
 - Record the installation channel, version, and owned file paths. Homebrew-managed installs are upgraded and removed through Homebrew; the script must not overwrite them.
 - Do not add login items, modify Codex configuration, or enable project integration merely because the app was installed.
 - Default uninstall removes only owned application files and helpers. Explicit data removal can also clear Pet preferences and caches; it never removes Codex conversations or project code.
+- Installation does not enable any conversation. An installed conversation skill/helper enables individual Pets explicitly; verify integration discovery and any session restart requirements.
 
 ## Proposed CLI contract
 
@@ -39,12 +40,15 @@ These commands are not implemented or available on PATH yet.
 | Command | Intended behavior |
 | --- | --- |
 | `pm-pet start` | Open the app and binding interface |
-| `pm-pet status` | Show version, installation channel, binding, and tracking state |
-| `pm-pet disable` | Stop Pet tracking and prompts; preserve the disabled preference |
-| `pm-pet enable` | Enable Pet tracking again; do not approve pending Codex decisions |
+| `pm-pet status` | Show the validated current conversation's binding and tracking state, plus app version/channel |
+| `pm-pet disable` | Stop tracking and prompts for the validated current conversation; preserve its disabled preference |
+| `pm-pet enable` | Enable the validated current conversation; reuse its existing Pet and never approve pending decisions |
+| `pm-pet disable --all` | Explicitly stop tracking for every Pet |
 | `pm-pet quit` | Stop all Pet processes and listeners |
 | `pm-pet update` | Upgrade a script-managed install; identify the proper command for other channels |
 | `pm-pet uninstall` | Remove a script-managed install using its ownership manifest |
 | `pm-pet uninstall --purge` | Also remove explicitly listed Pet-owned data |
 
 The menu bar must provide the same lifecycle controls. Disabling or uninstalling Pet does not automatically answer a question or resume a paused build.
+
+Outside Codex, require an explicit conversation identity or a user selection. Do not infer it from the current directory and do not treat a missing identity as a request to control all Pets. See [Native app development plan](APP-DEVELOPMENT.md).
