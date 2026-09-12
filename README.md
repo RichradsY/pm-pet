@@ -95,10 +95,16 @@ Uninstall preserves the checkout and Pet's local data by default. See [removal o
 | Drag the owl | Move it on your desktop |
 | Click a roadmap dot | Open the full roadmap |
 | Pet menu | Resize, restore hidden quota, or disable this Pet |
-| **Answer in Codex** | Return to the conversation to answer |
+| **Open Codex to reply** | Return to the conversation to answer |
 | **Not now** | Defer an explicitly optional setup step |
 
 Roadmap dots use **green** for completed, **deep green** for current, **gray** for pending, **yellow** for a decision, and **red** for required information. Labels identify the states too. Pet supports 75%–150% size presets and respects reduced motion and reduced transparency.
+
+### When Codex stops to ask
+
+**Waiting for your reply** stays visible even if Codex finishes its current turn and appears idle. Open the matching conversation and submit your answer on its question card. Opening the conversation alone does not answer it. For a plain-text question, reply in that conversation.
+
+After a matching card reply arrives, Pet shows **Reply received / Awaiting review**. The question stays pending until Codex reviews your answer and updates the roadmap; only then does this build continue. If you answered but the reminder still asks for a reply, tell Codex which question you answered so it can check the handoff.
 
 ### About quota
 

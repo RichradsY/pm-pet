@@ -354,7 +354,7 @@ test('reviewing a reply without pending delivery work has one review marker and 
     const result = compact(snapshot);
     assert.equal(result.visible.length, 1);
     assert.equal(result.visible[0].status, 'review');
-    assert.equal(result.visible[0].label, 'Reviewing reply');
+    assert.equal(result.visible[0].label, 'Awaiting review');
     assert.equal(result.visible[0].index, undefined);
     assert.equal(model(snapshot).all.filter(item => item.status === 'current').length, 0);
   }

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Clarify waiting for a reply versus a finished Codex turn. Show where to submit an answer and distinguish a received reply awaiting review from a new request for input.
+
 ## 0.1.0-alpha.1 — 2026-09-12
 
 First public source preview. Builds locally on macOS; no signed, notarized application download is provided.

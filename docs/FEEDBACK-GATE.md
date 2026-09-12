@@ -2,6 +2,10 @@
 
 PM Pet's co-build policy is to wait for the user's answer at consequential product, UX, scope, cost, or time decisions and known required-information prompts. The same build's child tasks wait too; unrelated conversations are unaffected.
 
+## What the user sees
+
+Codex can end its asking turn and appear idle while a decision is still pending. Pet keeps **Waiting for your reply** visible; turn completion is not build completion. **Open Codex to reply** only navigates to the owning conversation. Submit the answer on the original question card to begin the reply/review handoff. Plain-text prompts are answered in that conversation and need the owning agent to verify and resolve them.
+
 ## What releases the wait
 
 The Desktop adapter recognizes the locally observed `request_user_input_async` call format. It keeps the call ID, question-item IDs, question text, and answer-arrival metadata. It does not copy answers into Pet state. The tool's `{accepted: true}` response only acknowledges delivery.
@@ -10,7 +14,7 @@ Only a corresponding root `UserMessage` with matching question-call and item IDs
 
 An explicit request to cancel or defer is a separate outcome. The owning agent can cite the actual latest user-message ID and cancel the exact question with a revised full roadmap. This is not an answer or an approval. It is also the recovery path when the user explicitly asks to fix a stuck waiting mechanism; the agent must not insist that the broken question card be answered first.
 
-After every item in the current question is answered, Pet displays **Reviewing reply**. The wait remains until the owning agent reviews the actual answers in Codex and submits the matching resolution ID with the complete reviewed roadmap and current step. Other queued questions can still keep the gate closed. The agent resumes work only after reviewing the returned state.
+After every item in the current question is answered, Pet displays **Reply received / Awaiting review**. The wait remains until the owning agent reviews the actual answers in Codex and submits the matching resolution ID with the complete reviewed roadmap and current step. Other queued questions can still keep the gate closed. The agent resumes work only after reviewing the returned state.
 
 The adapter supports the observed Desktop format, not all possible Codex question tools. Plain-text questions and system/terminal prompts still need an explicit report and main-agent verification. Passwords stay in the original input window.
 
