@@ -172,6 +172,11 @@ No Mac available? Open [`prototypes/pm-pet-multi.html`](prototypes/pm-pet-multi.
 - [Development roadmap](docs/APP-DEVELOPMENT.md)
 - [Versioning](docs/VERSIONING.md) · [Changelog](CHANGELOG.md)
 
+## Contributors
+
+- [RichradsY](https://github.com/RichradsY) — Creator and maintainer; product direction and user testing.
+- **Codex by OpenAI** — AI assistance with implementation, debugging, testing, and documentation.
+
 ## License
 
 [MIT](LICENSE). You can use, modify, and share PM Pet under its license terms. PM Pet is an independent project and is not affiliated with or endorsed by OpenAI.
