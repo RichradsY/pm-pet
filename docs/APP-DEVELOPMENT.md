@@ -1,6 +1,6 @@
 # Native app development plan
 
-Status: planning, 2026-09-12. No native app, helper, skill package, live adapter, or installer has been implemented. The tagged prototype remains `0.1.0-prototype.1`.
+Status: native app planning, 2026-09-12. A five-Pet browser interaction prototype is available in `prototypes/pm-pet-multi.html`. No native app, helper, skill package, live adapter, or installer has been implemented. The tagged prototype remains `0.1.0-prototype.1`; the new design is an unreleased development change.
 
 ## Updated product contract
 
@@ -9,18 +9,22 @@ An explicitly enabled **conversation** owns one main Pet. This replaces the earl
 Confirmed requirements:
 
 - Enable or disable the Pet from inside the relevant Codex conversation.
-- Support multiple independent Pets, including two conversations open at once.
-- Use distinguishable character colors.
+- Design for up to five enabled main Pets, including independent conversations in the same project. Actual child-agent chicks do not consume this capacity.
+- Use five distinguishable character accents with conversation names or short labels.
+- Show shared account quota on only one Pet by default; let users enable it on other Pets individually.
 - Refresh account quota at a moderate frequency.
 
 Proposed defaults:
 
 - New conversations are off until explicitly enabled. Installation alone enables none.
 - Repeated enable for the same conversation restores its existing Pet without duplication.
+- At five enabled main Pets, an already-enabled binding remains an idempotent success. Enabling a sixth, including a previously disabled binding, returns a clear choice to disable one first. Never replace or evict another Pet automatically.
 - Switching or closing a Codex tab does not disable a Pet. The user can keep observing a background task.
 - Completed conversations retain an idle Pet until hidden or disabled; completion of a turn does not mean the whole product is finished.
 - A critical decision pauses only the owning conversation's build and its actual child agents. An unrelated conversation keeps running.
 - The menu bar lists all enabled conversations and offers per-conversation controls plus an explicit global disable.
+- The first-ever newly enabled Pet starts with quota visible; additional new bindings start with quota hidden. Existing visibility preferences survive disable/re-enable.
+- Hiding or disabling a Pet never transfers its quota display to another. All displays may be hidden; restore quota through any Pet's settings or menu entry.
 
 These defaults are implementation proposals, not claims about current Codex behavior.
 
@@ -62,7 +66,7 @@ Use one Swift/AppKit application with a menu bar controller and one floating win
 
 | Component | Responsibility |
 | --- | --- |
-| `PetRegistry` | Binding identity, enabled state, display name, theme, position, size, and visibility preferences |
+| `PetRegistry` | Binding identity, five-main-Pet capacity, enabled state, display name, theme, position, size, and visibility preferences |
 | `ConversationStore` | Roadmap, plan revision, completed items, unread progress, decision state, and child-agent ownership for one conversation |
 | `CodexAdapter` | Validated events for registered conversations; expose capability availability and source freshness |
 | `QuotaStore` | One shared quota snapshot and refresh scheduler for each validated authentication context |
@@ -74,6 +78,8 @@ The adapter and data stores must not depend on animation completion. Pet animati
 ### Data boundaries
 
 - `PetBinding`: binding key, workspace reference, name, color, enabled state, window position, scale, panel/usage visibility, and binding generation.
+- Persist whether the initial quota default has been assigned. A newly created binding cannot inherit default-visible quota merely because all previous Pets are hidden or disabled.
+- Check capacity atomically with enable; concurrent requests cannot create a sixth main Pet. Child-agent records never count toward the limit.
 - `BuildSnapshot`: conversation and turn IDs, plan revision, event sequence, step IDs/statuses, pending decision ID, and confirmed execution state.
 - `ChildAgent`: provider child ID plus explicit owning parent/build identity. Automatic child discovery does not enable a separate main Pet.
 - `QuotaSnapshot`: adapter authentication context, quota limit ID, observed windows, values, reset times, source timestamp, and last successful refresh.
@@ -84,7 +90,7 @@ The adapter and data stores must not depend on animation completion. Pet animati
 
 ## Distinguishing multiple Pets
 
-Start with two calm accent palettes, for example sage and blue, applied to feather accents/accessories. Retain the owl's readable eyes and face. Allocate different colors among visible Pets and persist the selection; let the user change it later.
+Use five calm accent palettes—sage, sky, lilac, rose, and sand—applied to feather accents/accessories. Retain the owl's readable eyes and face. Persist each selection. When a disabled Pet returns, reuse its saved color if still available; if a newer active Pet has taken that color, assign an unused accent to the returning Pet. Do not recolor other active Pets. Names and short labels remain stable. Manual color customization is a later native-app control.
 
 Color is not the only identifier. The overhead panel and menu entry show the conversation title or a user alias. Same-title conversations receive a disambiguating short label. Pet color does not change because the roadmap changes or the app restarts.
 
@@ -93,6 +99,8 @@ Quota red/orange/green and the decision lantern's yellow remain semantic colors,
 ## Shared quota refresh
 
 Quota is account-wide, not consumption attributed to one Pet. All Pets on the same validated authentication context display the same underlying snapshot and may hide it independently. Do not divide the remaining allowance between conversations.
+
+On initial setup, only the first-ever new binding has quota visible. Subsequent new bindings start with it hidden. Save each binding's preference, including across disable/re-enable; never move the display to another Pet when one is hidden or disabled. A menu entry and per-Pet settings always offer a quota toggle, so users can restore it even when none is visible. Enabling several displays adds views of one snapshot, not quota readers.
 
 App Server exposes `account/rateLimits/read` and `account/rateLimits/updated`. These are account endpoints, not conversation endpoints. Identify windows by `windowDurationMins` and quota buckets by the supplied limit ID; `primary` is not a guaranteed 5-hour window. [App Server rate limits](https://learn.chatgpt.com/docs/app-server#6-rate-limits-chatgpt)
 
@@ -129,10 +137,12 @@ Deliverable: a small technical spike and recorded capability results, without cl
 
 ### 2. Build the native multi-Pet shell
 
-- One app process, two independently colored/positioned windows, and a menu listing both conversations.
+- One app process, up to five independently colored/positioned windows, and a menu listing the enabled conversations and capacity.
 - Per-conversation enable/disable, panel hiding, full-Pet hiding, scale, and persistence.
 - A disabled conversation stays disabled after restart; B remains unchanged when A is disabled.
 - Double-click A returns to A and double-click B returns to B.
+- At five enabled main Pets, retrying enable for an active Pet succeeds; a sixth enable explains how to disable one first. Verify no implicit eviction, including concurrent enable requests and re-enabling a disabled binding.
+- Spawn chicks without consuming main-Pet capacity; keep the parent identity explicit.
 
 Deliverable: a locally launchable application with explicit disconnected states where an adapter is unavailable.
 
@@ -142,9 +152,11 @@ Deliverable: a locally launchable application with explicit disconnected states 
 - A step completion updates only its Pet; plan changes invalidate affected items and do not invent progress.
 - A question in A triggers A's lantern; B continues its own state and animations.
 - Verify the actual decision answer before clearing waiting state. Do not treat a request cleanup as an answer.
-- Verify that enabling two Pets does not double quota requests and that all-hidden/disabled policies work.
+- Verify that enabling five Pets does not multiply quota requests: active refresh remains one per 60 seconds, idle refresh one per 300 seconds, subject to a verified live adapter.
+- Verify only the first new Pet starts with quota visible; manually show a second, hide or disable the first, and confirm preferences persist without automatic transfer.
+- Hide every quota display, then restore one through settings or the menu; test all-hidden/disabled polling policies.
 
-Deliverable: real two-conversation observation and a tested cooperative reporting flow. Whole-build pausing remains a separate capability gate.
+Deliverable: real multi-conversation observation, five-Pet capacity checks, and a tested cooperative reporting flow. Whole-build pausing remains a separate capability gate.
 
 ### 4. Package the private alpha and lifecycle tests
 

@@ -12,6 +12,8 @@
 - Two conversations in the same project can have independent Pets; the project path is not the binding identity.
 - Enable/disable is intended to be invoked inside the owning Codex conversation through an installed integration.
 - Bindings use provider, host, and conversation identity; repeated enable reuses the existing Pet.
+- Design for up to five enabled main Pets. Actual child-agent chicks do not consume this capacity.
+- At capacity, enabling an already-enabled conversation succeeds without duplication. Enabling a sixth main Pet asks the user to disable one first; never replace or evict a Pet automatically.
 - New conversations are off by default in the proposed app; switching/closing a tab does not automatically disable tracking.
 - Questions and answers remain in the linked Codex conversation.
 - The pet provides a concise view and a route back to that conversation.
@@ -46,6 +48,7 @@
 - No chicks appear by default; intended child-agent activity causes hatching, then growth and departure.
 - Chick lifecycle animations are simulated; actual child-agent discovery is not connected.
 - Multiple main Pets have persistent, distinguishable accent colors and conversation names; chicks belong to their actual parent Pet.
+- The five default accents are sage, sky, lilac, rose, and sand. Names or short labels provide identification alongside color.
 - Character colors do not alter quota warning colors or the yellow human-input signal.
 
 ## Quotas and account data
@@ -54,7 +57,11 @@
 - Hidden quota displays have an independent recovery control that restores only available windows.
 - Quota values in the prototype are examples, not account readings.
 - Account quota is shared by all Pets using the same validated authentication context; it is not per-conversation consumption.
+- Only the first-ever newly enabled Pet shows quota by default. Additional new Pets start with quota hidden; each Pet can turn its own display on or off.
+- Quota visibility preferences persist across disable/re-enable. Hiding or disabling the first Pet never moves quota to another automatically; all displays may remain hidden.
+- Quota can be restored from any Pet's settings or its menu entry, including when every display is hidden.
 - Proposed refresh defaults: live events promptly, one shared read every 60 seconds during running work, and every 5 minutes while idle. Hide-all stops active quota polling.
+- These refresh intervals are proposed scheduler behavior; a live account read path and its actual freshness still need verification.
 - Progress and input reminders use their own event path and do not wait for quota polling. Cache repainting does not advance the last-successful-update timestamp.
 
 ## Lifecycle and ownership
@@ -68,4 +75,4 @@
 - Installation must not automatically enable login startup, modify project rules, or grant approvals.
 - These lifecycle controls are requirements, not implemented native features.
 
-See [Native app development plan](APP-DEVELOPMENT.md) for the identity model, quota scheduler, proposed defaults, capability gates, and two-conversation acceptance tests.
+See [Native app development plan](APP-DEVELOPMENT.md) for the identity model, five-Pet capacity, quota scheduler, proposed defaults, and capability gates.
