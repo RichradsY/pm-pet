@@ -102,7 +102,7 @@ Roadmap dots use **green** for completed, **deep green** for current, **gray** f
 
 ### When Codex stops to ask
 
-**Waiting for your reply** stays visible even if Codex finishes its current turn and appears idle. Open the matching conversation and submit your answer on its question card or send it as a normal chat message. Opening the conversation alone does not submit a reply.
+When Codex finishes its current turn, the panel says **Turn ended**. An unanswered question stays visible with **This turn has ended. Reply in Codex to continue.** The conversation remains available for your next message. Open the matching conversation and submit your answer on its question card or send it as a normal chat message. Opening the conversation alone does not submit a reply.
 
 A normal chat message first shows **Message received / Awaiting review**. Codex checks which question it answers; unrelated messages leave the question open. A correlated card reply, or an explicitly verified chat answer, advances the question count. Partial answers show which question is still waiting.
 

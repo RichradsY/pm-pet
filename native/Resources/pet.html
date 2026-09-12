@@ -344,12 +344,20 @@ function questionState(p){
   label:replyReview?'Reply received':messageReview?'Message received':optionalSetup?'Optional setup':itemLabel||(kind==='input'?'Information needed':'Waiting for your reply'),
   countLabel:receiptCount||(reviewing?itemLabel:''),
   reviewCopy:messageReview?'Codex needs to check whether your message answers this question.':replyReview?'Codex needs to review your reply before continuing.':'',
-  replyHint:!reviewing&&!setup&&destination==='codex'?'Codex may be idle while waiting. '+(question.origin==='codex-input-tool'?'Reply in the question card or this Codex chat to continue.':'Send your reply in this conversation to continue.'):'',
+  replyHint:!reviewing&&!setup&&destination==='codex'?(p.turnState?.status==='ended'?'This turn has ended. Reply in Codex to continue.':p.turnState?.status==='interrupted'?'This turn was stopped. Reply in Codex when you are ready.':question.origin==='codex-input-tool'?'Reply in the question card or this Codex chat to continue.':'Send your reply in this Codex chat to continue.'):'',
   canAnswer:!reviewing,
   canDefer:optionalSetup&&!replyReview,
   showDestinationHint:!reviewing&&kind==='input'&&destination!=='codex',
   action:reviewing||setup||kind==='input'&&destination!=='codex'?'open_codex':kind==='input'?'provide_info':'answer'
  };
+}
+function phaseLabel(p){
+ const turn=p.turnState?.status,question=questionState(p);
+ if(turn==='ended')return 'Turn ended';
+ if(turn==='interrupted')return 'Turn stopped';
+ if(question)return question.reviewing?'Awaiting review':question.setup?'Setup needed':question.kind==='input'?'Input needed':'Waiting for you';
+ if(p.roadmapNeedsUpdate)return 'Planning';
+ return ({building:'Building',running:'Building',planning:'Planning',checking:'Checking',waiting:'Needs you',complete:'Complete',completed:'Complete',idle:'Idle',paused:'Paused',error:'Source error'}[p.phase]||'Connected');
 }
 function setupDeferRequest(p){
  const question=questionState(p);
@@ -386,7 +394,7 @@ function roadmapState(p,limit=7){
  const pending=steps.filter(step=>!step.done);
  const candidate=pending.find(step=>step.id===p.currentStepId)||pending.find(step=>step.label===p.currentStep)||pending[0];
  const blocked=p.question?(pending.find(step=>step.id===p.question.stepId)||candidate):null;
- const working=['planning','building','running','checking'].includes(p.phase)&&!['disconnected','unavailable','error'].includes(p.sourceStatus);
+ const working=['planning','building','running','checking'].includes(p.phase)&&!['ended','interrupted'].includes(p.turnState?.status)&&!['disconnected','unavailable','error'].includes(p.sourceStatus);
  const current=!p.roadmapNeedsUpdate&&!p.question&&working?candidate:null;
  const all=steps.map((step,index)=>({...step,index,status:step.done?'done':step.id===blocked?.id?question.attention:step.id===current?.id?'current':'pending'}));
  const focus=blocked||candidate;
@@ -400,7 +408,7 @@ function compactRoadmap(p){
  if(model.reviewing&&!kind)return {...model,visible:[{id:'review',label:'Reviewing your new request',status:'review'}],before:0,after:0};
  return model;
 }
-function activity(p){return questionState(p)?.reviewing?'idle':p.question?'attention':['unavailable','disconnected','error'].includes(p.sourceStatus)?'idle':({waiting:'attention',paused:'idle',building:'reading',running:'reading',planning:'reading',checking:'reading',complete:'complete',completed:'complete'}[p.phase]||'idle');}
+function activity(p){return questionState(p)?.reviewing?'idle':p.question?'attention':['ended','interrupted'].includes(p.turnState?.status)||['unavailable','disconnected','error'].includes(p.sourceStatus)?'idle':({waiting:'attention',paused:'idle',building:'reading',running:'reading',planning:'reading',checking:'reading',complete:'complete',completed:'complete'}[p.phase]||'idle');}
 /* PET_STATE_END */
 let setupAttempt=null,setupTimer=null,setupSequence=0;
 function renderSetupDeferral(){
@@ -546,7 +554,7 @@ window.renderPet=function(data){
  renderMini(p,data.panelVisible);updateAnimation(p);renderChildren(p);quota(data.quota,p);
  text('.native-title',p.title||'Codex conversation');
  const reviewing=!!p.roadmapNeedsUpdate;
- text('.native-phase',question?.reviewing?'Awaiting review':question?.setup?'Setup needed':kind==='input'?'Input needed':kind?'Waiting for you':reviewing?'Planning':({building:'Building',running:'Building',planning:'Planning',checking:'Checking',waiting:'Needs you',complete:'Complete',completed:'Complete',idle:'Idle',paused:'Paused',error:'Source error'}[p.phase]||'Connected'));
+ text('.native-phase',phaseLabel(p));
  text('.pp-title',reviewing?'Reviewing your new request':p.currentStep||'');$('.pp-title').hidden=!!kind||(!reviewing&&!p.currentStep);
  const progress=p.progress;const known=!reviewing&&progress&&Number.isFinite(progress.done)&&Number.isFinite(progress.total)&&progress.total>0;
  $('.native-no-plan').hidden=!!known;$('.pp-progress').hidden=!known;

@@ -4,7 +4,7 @@ PM Pet's co-build policy is to wait for the user's answer at consequential produ
 
 ## What the user sees
 
-Codex can end its asking turn and appear idle while a decision is still pending. Pet keeps **Waiting for your reply** visible; turn completion is not build completion. **Open Codex to reply** only navigates to the owning conversation. Submit the answer on the original question card or send it in that conversation. Ordinary chat feedback shows **Message received / Awaiting review** until the owning agent identifies which items it answers. Multi-item questions show reply counts and move to the next unanswered item; the next item can reopen a hidden panel once.
+Codex can end its asking turn while a decision is still pending. Once that end event is observed, the panel says **Turn ended** and explains that replying in Codex continues the conversation. The question remains open. A new message replaces the ended-turn state; message receipt and answer review remain separate from delivery progress. Without an observed end event, Pet does not guess that a turn ended from a pending question or silence. **Open Codex to reply** only navigates to the owning conversation. Submit the answer on the original question card or send it in that conversation. Ordinary chat feedback shows **Message received / Awaiting review** until the owning agent identifies which items it answers. Multi-item questions show reply counts and move to the next unanswered item; the next item can reopen a hidden panel once.
 
 ## What releases the wait
 

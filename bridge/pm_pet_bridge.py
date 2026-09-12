@@ -32,6 +32,7 @@ MAX_INPUT_ITEMS = 32
 MAX_INPUT_TOMBSTONES = 256
 MAX_FEEDBACK_MESSAGES = 32
 MAX_DEFERRED_INPUT_REPLIES = 128
+MAX_PENDING_TURN_ENDS = 16
 # Native state/ack readers accept 4 MiB. New question admission uses half of that
 # across the entire registry, leaving room for roadmaps, outcomes, and envelopes.
 MAX_QUESTION_STATE_BYTES = 2 * 1024 * 1024
@@ -230,6 +231,8 @@ class Bridge:
             pet.setdefault("feedback", None)
             pet.setdefault("feedbackMessages", [])
             pet.setdefault("deferredInputReplies", [])
+            pet.setdefault("turnState", None)
+            pet.setdefault("pendingTurnEnds", [])
         self.bindings = read_json(self.bindings_path) if self.bindings_path.exists() else {}
         self.tails = {}
         self.last_discovery = {}
@@ -276,7 +279,8 @@ class Bridge:
                    "currentStepId": None,
                    "steps": [], "question": None, "sourceUpdatedAt": None, "sourceStatus": "connecting",
                    "children": [], "generation": 0, "lastReportSequence": -1, "planVersion": 0,
-                   "roadmapNeedsUpdate": False, "requestObservedAt": None, "planReviewedAt": None}
+                   "roadmapNeedsUpdate": False, "requestObservedAt": None, "planReviewedAt": None,
+                   "turnState": None}
             self.state["pets"].append(pet)
         pet["enabled"] = True
         pet["sourceStatus"] = "connecting"
@@ -872,6 +876,85 @@ class Bridge:
             result["pets"] = [pet for pet in result["pets"] if pet["id"] == validate_id(request.get("id"))]
         return result
 
+    def remember_turn_end(self, pet, turn_id, status, observed):
+        pending = pet.setdefault("pendingTurnEnds", [])
+        old = next((item for item in pending if item["turnId"] == turn_id), None)
+        if old and old["observedAt"] >= observed:
+            return
+        pending[:] = [item for item in pending if item["turnId"] != turn_id]
+        pending.append({"turnId": turn_id, "status": status, "observedAt": observed})
+        pending.sort(key=lambda item: (item["observedAt"], item["turnId"]))
+        del pending[:-MAX_PENDING_TURN_ENDS]
+        self.changed = True
+
+    def observe_turn_state(self, pet, event_type, payload, observed):
+        """Observe root turn activity separately from the report/question gate.
+
+        Report timestamps cannot hide a delayed lifecycle event. Turn identity and
+        this independent event clock keep old completions from overwriting newer
+        input or a newer turn; no lifecycle observation resolves a question.
+        """
+        statuses = {"task_started": "running", "task_complete": "ended",
+                    "turn_aborted": "interrupted", "user_message": "input_received"}
+        if not observed or event_type not in statuses:
+            return False
+        turn_id = payload.get("turn_id")
+        if turn_id is not None and (not isinstance(turn_id, str) or not turn_id.strip() or len(turn_id) > 200):
+            return False
+        current = pet.get("turnState") or {}
+        current_id, previous_at = current.get("turnId"), current.get("observedAt")
+        same_turn = bool(turn_id and current_id == turn_id)
+        # A new turn's start may be discovered after its user message on another
+        # shard. Matching identity lets that older start fill in running status.
+        delayed_start = event_type == "task_started" and same_turn and current.get("status") == "input_received"
+        if previous_at and observed < previous_at and not delayed_start:
+            return False
+        if event_type in ("task_complete", "turn_aborted"):
+            if current_id and turn_id != current_id:
+                if turn_id:
+                    self.remember_turn_end(pet, turn_id, statuses[event_type], observed)
+                return False
+            if current.get("status") == "input_received" and not same_turn:
+                if current_id is None and turn_id is None:
+                    # Legacy unscoped lifecycle can retain its existing phase
+                    # behavior, but cannot prove this new input's turn has ended.
+                    return True
+                if turn_id:
+                    self.remember_turn_end(pet, turn_id, statuses[event_type], observed)
+                return False
+        if event_type == "task_started":
+            if same_turn and current.get("status") in ("ended", "interrupted") and observed <= previous_at:
+                return False
+            if current_id and turn_id != current_id and previous_at and observed <= previous_at:
+                return False
+        if event_type == "user_message" and same_turn and current.get("status") in ("ended", "interrupted") and observed <= (current.get("inputObservedAt") or ""):
+            return False
+        status = statuses[event_type]
+        if event_type == "user_message" and current.get("status") == "running" and (same_turn or (turn_id is None and current_id is None)):
+            status = "running"
+        result = {"status": status, "observedAt": max(observed, previous_at or "")}
+        if turn_id:
+            result["turnId"] = turn_id
+        if event_type == "user_message":
+            result["inputObservedAt"] = observed
+        elif same_turn and current.get("inputObservedAt"):
+            result["inputObservedAt"] = current["inputObservedAt"]
+        # A matching end may already have arrived from another source shard.
+        # Apply it only after the current turn's identity is independently known.
+        pending = pet.get("pendingTurnEnds", [])
+        terminal = next((item for item in pending if item["turnId"] == turn_id and item["observedAt"] >= result["observedAt"]), None) if turn_id else None
+        if terminal:
+            result.update({"status": terminal["status"], "observedAt": terminal["observedAt"]})
+        if pending:
+            retained = [item for item in pending if item["observedAt"] > result["observedAt"]]
+            if retained != pending:
+                pet["pendingTurnEnds"] = retained
+                self.changed = True
+        if result != current:
+            pet["turnState"] = result
+            self.changed = True
+        return True
+
     def apply_event(self, pet, event):
         kind = event.get("type")
         payload = event.get("payload") or {}
@@ -887,6 +970,9 @@ class Bridge:
             return
         if kind != "event_msg":
             return
+        if event_type in ("task_started", "task_complete", "turn_aborted"):
+            if not self.observe_turn_state(pet, event_type, payload, observed):
+                return
         if event_type == "token_count":
             quota = quota_snapshot(payload.get("rate_limits"), observed)
             if quota:
@@ -904,6 +990,7 @@ class Bridge:
                 request_id = item.get("id")
                 if event_owner != pet["id"] or not observed or not isinstance(request_id, str) or not request_id:
                     return
+                self.observe_turn_state(pet, "user_message", payload, observed)
                 if self.observe_input_reply(pet, item, observed):
                     return
                 self.observe_feedback_message(pet, item, observed)

@@ -13,7 +13,7 @@ assert.equal(html.split(start).length, 2, 'Native view must expose one state blo
 assert.equal(html.split(end).length, 2, 'Native view must expose one state block');
 const source = html.split(start)[1].split(end)[0];
 const state = vm.runInNewContext(
-  `${source}\n({ attentionKind, questionState, setupDeferRequest, setupDeferralState, completedTransitions, roadmapState, compactRoadmap, activity })`,
+  `${source}\n({ attentionKind, phaseLabel, questionState, setupDeferRequest, setupDeferralState, completedTransitions, roadmapState, compactRoadmap, activity })`,
   {},
   { filename: 'native/Resources/pet.html:PET_STATE', timeout: 1000 }
 );
@@ -600,4 +600,39 @@ test('a definite native rejection remains distinct from timeout uncertainty', ()
     questionId: pending.questionId, generation: pending.generation, outcome: 'failed' });
   assert.equal(result.status, 'failed');
   assert.match(result.error, /Could not defer setup/);
+});
+
+test('only an observed turn end labels a still-unanswered question as turn ended', () => {
+  const question = { id: 'q-turn', text: 'Choose the layout', kind: 'decision' };
+  const waiting = pet({ phase: 'waiting', question });
+  assert.equal(state.phaseLabel(waiting), 'Waiting for you');
+  const ended = { ...waiting, turnState: { status: 'ended', observedAt: '2026-01-01T12:00:00Z' } };
+  assert.equal(state.phaseLabel(ended), 'Turn ended');
+  assert.equal(state.activity(ended), 'attention');
+  assert.match(questionModel(ended).replyHint, /^This turn has ended\./);
+  assert.equal(questionModel(ended).canAnswer, true);
+  assert.deepEqual(statuses(ended), statuses(waiting));
+});
+
+test('new input replaces the ended-turn label without approving the pending question', () => {
+  const question = { id: 'q-turn', text: 'Choose the layout', kind: 'decision' };
+  const received = pet({ phase: 'waiting', question, turnState: { status: 'input_received' },
+    feedback: { questionId: question.id, sourceUserMessageId: 'new-message', status: 'pending_review' } });
+  assert.equal(state.phaseLabel(received), 'Awaiting review');
+  assert.equal(questionModel(received).label, 'Message received');
+  assert.equal(questionModel(received).replyHint, '');
+  assert.equal(received.question.id, question.id);
+  const resumed = pet({ turnState: { status: 'running' } });
+  assert.equal(state.phaseLabel(resumed), 'Building');
+});
+
+test('a completed turn remains separate from delivery completion or interruption', () => {
+  const ended = pet({ phase: 'complete', turnState: { status: 'ended' }, steps: [step('done', true)] });
+  assert.equal(state.phaseLabel(ended), 'Turn ended');
+  assert.deepEqual(statuses(ended), [['done', 'done']]);
+  assert.equal(state.phaseLabel(pet({ phase: 'paused', turnState: { status: 'interrupted' } })), 'Turn stopped');
+  assert.equal(state.phaseLabel(pet({ phase: 'idle' })), 'Idle');
+  const stoppedWork = pet({ phase: 'building', turnState: { status: 'ended' } });
+  assert.equal(state.activity(stoppedWork), 'idle');
+  assert.deepEqual(statuses(stoppedWork), [['spec', 'done'], ['build', 'pending'], ['verify', 'pending']]);
 });
