@@ -10,7 +10,7 @@ Status: `0.1.0-alpha.1` source preview, 2026-09-12. The repository contains a Sw
 | Native UI | Independent owl/progress surfaces, colors, dragging, size presets, per-Pet quota visibility, menu controls | Full-Pet hiding, unread progress, broader display/accessibility checks |
 | Progress and decisions | Main-agent roadmap/question reports, generation/sequence validation, matching question resolution | Automatic integration discovery and sustained reporting across sessions |
 | Activity | Recorded root/child events; child identity stays with its owning Pet | Broader transcript-format and resumed-child coverage |
-| Quota | Shared general quota, verified conditional CLI reads, 60/300-second scheduler, truthful age/status, weekly-only handling | Broader CLI/auth-mode compatibility; no permanent live Desktop identity binding |
+| Quota | Shared general quota, verified conditional CLI reads every 60 seconds while shown, truthful age/status, weekly-only handling | Broader CLI/auth-mode compatibility; no permanent live Desktop identity binding |
 | Lifecycle | Acknowledged launch/rendering, disable/re-enable, quit/restart tested on the development Mac | Prebuilt package distribution and other-machine tests |
 | Execution control | Explicitly unavailable in the adapter | Confirmed pause/review/resume of the owning build tree |
 
@@ -127,14 +127,13 @@ Implemented scheduling:
 | Trigger / state | Policy |
 | --- | --- |
 | Genuine Desktop usage check in an enabled root task | Update the snapshot and last Desktop account fingerprint |
-| Verified account, visible quota, and confirmed running work without a pending question | Schedule the next read 60 seconds after success |
-| Verified account and visible quota while idle or awaiting a reply | Schedule the next read 300 seconds after success |
+| Verified account and quota shown by any enabled Pet | Schedule the next read 60 seconds after success, including idle, ended, and awaiting-reply tasks |
 | All quota displays hidden | Stop polling and cancel an in-flight read; ordinary progress observation remains independent |
 | All Pets disabled or app quit | Stop polling and cancel the owned reader |
 | Transport failure | Keep the previous value and timestamp, show status, and back off |
 | Account mismatch or unavailable authentication metadata | Show quota unavailable until the required account check succeeds |
 
-One worker serves all Pets and prevents overlapping requests. Active means an observed running turn in an enabled build without a pending question, not keyboard focus or an open Codex window. Progress and human-input events do not wait for the quota timer. No Pet manual-refresh button or OS-wake hook is implemented.
+One worker serves all Pets and prevents overlapping requests. Account usage can change in other conversations or devices, so bound-task activity never slows visible quota polling. No additional conversation observation is required. Progress and human-input events do not wait for the quota timer. No Pet manual-refresh button or OS-wake hook is implemented.
 
 Before each read, a scoped hash of local `auth.json` → `tokens.account_id` must match the last genuine Desktop `get_usage_limits` account fingerprint. The child is pinned to that `CODEX_HOME` and `cli_auth_credentials_store="file"` for the process only. The account hash and auth-file generation must remain unchanged before and after the read; a changed file, including a token refresh during the request, discards the result. No persistent configuration is changed, and no raw account IDs, tokens, credit balances, or auth-file contents are retained in Pet state.
 
@@ -177,7 +176,7 @@ Current: explicit roadmap/question reports, observed root/child activity, stale-
 - A step completion updates only its Pet; plan changes invalidate affected items and do not invent progress.
 - A question in A triggers A's lantern; B continues its own state and animations.
 - Verify the actual decision answer before clearing waiting state. Do not treat a request cleanup as an answer.
-- Verify across five real Pets that visible copies share one worker: schedule after successful reads at 60 seconds during running work or 300 seconds while idle/awaiting reply. Include account changes, rejected auth-file changes, failure backoff, and cancellation.
+- Verify across five real Pets that visible copies share one worker: schedule 60 seconds after each successful read regardless of bound-task activity or pending questions. Include activity in a task without a Pet, account changes, rejected auth-file changes, failure backoff, and cancellation.
 - Verify only the first new Pet starts with quota visible; manually show a second, hide or disable the first, and confirm preferences persist without automatic transfer.
 - Hide every quota display, then restore one through settings or the menu; test all-hidden/disabled polling policies.
 

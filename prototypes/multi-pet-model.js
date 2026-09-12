@@ -198,7 +198,7 @@
       pollIntervalMs() {
         const active = [...registry.values()].filter(pet => pet.enabled);
         if (!active.some(pet => pet.quotaVisible)) return null;
-        return active.some(pet => RUNNING_PHASES.has(pet.phase)) ? 60000 : 300000;
+        return 60000;
       },
       toJSON() { return { version: 1, hasCreatedPet, pets: copy([...registry.values()]), quota: copy(quota) }; }
     };
