@@ -29,4 +29,14 @@ Preserve these product boundaries:
 
 Do not commit runtime state, credentials, real question replies, private conversation IDs, personal paths, generated app bundles, or signing material. `.pm-pet/` and build outputs are intentionally ignored. Run `git diff --check` before opening a pull request.
 
+## AI contribution attribution
+
+When Codex helps create a change, retain the contributor's Git author identity and add its official co-author trailer once, after a blank line in the commit message:
+
+```text
+Co-authored-by: Codex <noreply@openai.com>
+```
+
+This records AI assistance in the commit itself. README acknowledgements are separate from GitHub's contributor statistics. Attribute only actual assistance; do not add empty commits or rewrite published history just to change a contributor count. See [GitHub's co-author guidance](https://docs.github.com/en/pull-requests/how-tos/commit-changes/creating-a-commit-with-multiple-authors) and [Codex's attribution implementation](https://github.com/openai/codex/blob/ee6814bfa4889fe9b2b3dcc9cc8bdd91effa8ab8/codex-rs/ext/git-attribution/src/world_state.rs).
+
 Contributions are made under the project's [MIT License](LICENSE).

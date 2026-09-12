@@ -175,7 +175,7 @@ No Mac available? Open [`prototypes/pm-pet-multi.html`](prototypes/pm-pet-multi.
 ## Contributors
 
 - [RichradsY](https://github.com/RichradsY) — Creator and maintainer; product direction and user testing.
-- **Codex by OpenAI** — AI assistance with implementation, debugging, testing, and documentation.
+- **[Codex](https://github.com/codex) by OpenAI** — AI assistance with implementation, debugging, testing, and documentation.
 
 ## License
 
