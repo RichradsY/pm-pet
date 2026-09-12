@@ -36,6 +36,20 @@ enum SetupDeferralOutcome: String {
 final class PetPanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
+
+    // Accessory apps have no standard Edit menu. Route its shortcuts through
+    // the WebKit first responder so the inline field supports normal editing.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if modifiers == .command, let key = event.charactersIgnoringModifiers?.lowercased(),
+           let action = ["a": "selectAll:", "c": "copy:", "v": "paste:", "x": "cut:", "z": "undo:"][key],
+           NSApp.sendAction(NSSelectorFromString(action), to: nil, from: self) {
+            return true
+        }
+        if modifiers == [.command, .shift], event.charactersIgnoringModifiers?.lowercased() == "z",
+           NSApp.sendAction(NSSelectorFromString("redo:"), to: nil, from: self) { return true }
+        return super.performKeyEquivalent(with: event)
+    }
 }
 
 // WebKit reports CSS geometry from the viewport's top-left corner. Keeping the
@@ -228,6 +242,28 @@ final class PetSurface: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
     }
 }
 
+// A new unanswered item deserves one reminder, even within the same tool call.
+// Receipt/review states are not new requests for user action.
+func actionableQuestionIdentity(_ pet: [String: Any]) -> String? {
+    guard let question = pet["question"] as? [String: Any],
+          question["status"] as? String != "awaiting_review" else { return nil }
+    let questionID = question["id"] as? String ?? question["text"] as? String ?? ""
+    if let feedback = pet["feedback"] as? [String: Any],
+       feedback["status"] as? String == "pending_review",
+       feedback["questionId"] as? String == questionID,
+       let messageID = feedback["sourceUserMessageId"] as? String, !messageID.isEmpty { return nil }
+    let items = question["items"] as? [[String: Any]] ?? []
+    let offset = items.firstIndex { $0["answered"] as? Bool != true }
+    let item = offset.map { items[$0] }
+    var itemIndex: Any = NSNull()
+    if let offset = offset { itemIndex = items[offset]["index"] as? Int ?? offset }
+    let identity: [Any] = [pet["id"] ?? NSNull(), pet["generation"] ?? NSNull(), questionID,
+                           itemIndex,
+                           item?["questionItemId"] ?? NSNull()]
+    guard let encoded = try? JSONSerialization.data(withJSONObject: identity) else { return nil }
+    return String(data: encoded, encoding: .utf8)
+}
+
 final class PetWindowController {
     private static let topInset: CGFloat = 24
     let id: String
@@ -240,10 +276,11 @@ final class PetWindowController {
     private var dragMouse: NSPoint?
     private var hasPosition = false
     private var appliedPosition: NSPoint?
-    private var lastQuestionID: String?
+    private var lastActionableQuestionIdentity: String?
     private var panelHeight: CGFloat = 280
     var requestSetupDeferral: (([String: Any], @escaping (SetupDeferralOutcome) -> Void) -> Void)?
-    private let send: ([String: Any]) -> Void
+    private var nameEditing = false
+    private let send: ([String: Any], ((String?) -> Void)?) -> Void
     var didRender: (() -> Void)? {
         didSet {
             owl.didRender = didRender
@@ -251,7 +288,7 @@ final class PetWindowController {
         }
     }
 
-    init(id: String, index: Int, send: @escaping ([String: Any]) -> Void) {
+    init(id: String, index: Int, send: @escaping ([String: Any], ((String?) -> Void)?) -> Void) {
         self.id = id
         self.send = send
         owl.receive = { [weak self] body in self?.handle(body) }
@@ -268,7 +305,7 @@ final class PetWindowController {
         self.pet = pet
         // The fixed band lets compact progress controls appear without moving
         // the owl: HTML shifts its top coordinates by the same topInset.
-        let height = ceil(104 * CGFloat(sizePercent) / 100) + 38 + Self.topInset + (quotaVisible ? 54 : 0)
+        let height = ceil(104 * CGFloat(sizePercent) / 100) + 38 + Self.topInset + (quotaVisible ? 54 : 0) + (nameEditing ? 40 : 0)
         // Keep the small Pet compact while giving enlarged chicks room to
         // hatch and grow at either edge of their parent owl.
         let width = max(180, ceil(132 * CGFloat(sizePercent) / 100) + 48)
@@ -289,11 +326,12 @@ final class PetWindowController {
         owl.render(payload)
         panel.render(payload)
         let question = pet["question"] as? [String: Any]
-        let questionID = question?["id"] as? String ?? question?["text"] as? String
-        if let questionID = questionID, questionID != lastQuestionID {
-            showPanel(true)
+        if let identity = actionableQuestionIdentity(pet) {
+            if identity != lastActionableQuestionIdentity { showPanel(true) }
+            lastActionableQuestionIdentity = identity
+        } else if question == nil {
+            lastActionableQuestionIdentity = nil
         }
-        lastQuestionID = questionID
         layoutPanel()
         owl.window.orderFrontRegardless()
     }
@@ -330,7 +368,7 @@ final class PetWindowController {
         var command = fields
         command["action"] = "preferences"
         command["id"] = id
-        send(command)
+        send(command, nil)
     }
 
     func openConversation() {
@@ -339,7 +377,22 @@ final class PetWindowController {
         NSWorkspace.shared.open(url)
     }
 
-    func disable() { send(["action": "disable", "id": id]) }
+    func disable() { send(["action": "disable", "id": id], nil) }
+
+    private func editName() {
+        nameEditing = true
+        update(pet: pet, state: ["quota": payload["quota"] ?? NSNull(), "capabilities": payload["capabilities"] ?? [:], "revision": payload["_revision"] ?? 0])
+        owl.window.makeKeyAndOrderFront(nil)
+        owl.window.makeFirstResponder(owl.webView)
+        owl.webView.evaluateJavaScript("window.beginNameEdit()", completionHandler: nil)
+    }
+
+    private func nameSaveResult(title: String, error: String?) {
+        var result: [String: Any] = ["ok": error == nil, "title": title]
+        if let error = error { result["error"] = error }
+        guard let data = try? JSONSerialization.data(withJSONObject: result), let json = String(data: data, encoding: .utf8) else { return }
+        owl.webView.evaluateJavaScript("window.finishNameSave(\(json))", completionHandler: nil)
+    }
 
     private func setupDeferResult(questionID: String, generation: Int, requestToken: String, outcome: SetupDeferralOutcome) {
         let result: [String: Any] = ["ok": outcome == .confirmed, "outcome": outcome.rawValue, "questionId": questionID, "generation": generation, "requestToken": requestToken]
@@ -352,6 +405,7 @@ final class PetWindowController {
         let header = NSMenuItem(title: title, action: nil, keyEquivalent: "")
         header.isEnabled = false
         menu.addItem(header)
+        menu.addItem(actionItem("Rename Pet…") { [weak self] in self?.editName() })
         menu.addItem(actionItem(panelVisible ? "Hide progress" : "Show progress") { [weak self] in guard let self = self else { return }; self.showPanel(!self.panelVisible, focus: true) })
         menu.addItem(actionItem("Return to Codex") { [weak self] in self?.openConversation() })
         let usage = actionItem("Show account usage") { [weak self] in guard let self = self else { return }; self.preferences(["quotaVisible": !self.quotaVisible]) }
@@ -392,6 +446,20 @@ final class PetWindowController {
             }
             requestSetupDeferral(["action": "defer_setup", "id": id, "questionId": questionID, "generation": generation], { [weak self] outcome in
                 self?.setupDeferResult(questionID: questionID, generation: generation, requestToken: requestToken, outcome: outcome)
+            })
+        case "beginNameEdit": editName()
+        case "endNameEdit":
+            nameEditing = false
+            update(pet: pet, state: ["quota": payload["quota"] ?? NSNull(), "capabilities": payload["capabilities"] ?? [:], "revision": payload["_revision"] ?? 0])
+        case "saveName":
+            guard let raw = body["title"] as? String else { return }
+            let name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty, name.unicodeScalars.count <= 100 else {
+                nameSaveResult(title: raw, error: "Enter a name of 1–100 characters.")
+                return
+            }
+            send(["action": "preferences", "id": id, "title": name], { [weak self] error in
+                self?.nameSaveResult(title: name, error: error)
             })
         case "togglePanel": showPanel(!panelVisible, focus: true)
         case "hidePanel": showPanel(false)
@@ -465,6 +533,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var lastHeartbeat = Date.distantPast
     private var quitRequestID: String?
     private var pendingSetupDeferrals: [String: (deadline: Date, completion: (SetupDeferralOutcome) -> Void)] = [:]
+    private var pendingSaves: [String: (deadline: Date, requestURL: URL, completion: (String?) -> Void)] = [:]
 
     init(options: LaunchOptions) { self.options = options }
 
@@ -547,7 +616,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             guard let id = pet["id"] as? String else { continue }
             if controllers[id] == nil {
                 let themeSlot = ["sage", "sky", "lilac", "rose", "sand"].firstIndex(of: pet["theme"] as? String ?? "") ?? index
-                controllers[id] = PetWindowController(id: id, index: themeSlot) { [weak self] command in self?.send(command) }
+                controllers[id] = PetWindowController(id: id, index: themeSlot) { [weak self] command, completion in self?.send(command, completion: completion) }
                 controllers[id]?.didRender = { [weak self] in self?.publishNativeStatus() }
                 controllers[id]?.requestSetupDeferral = { [weak self] command, completion in
                     guard let self = self else { completion(.failed); return }
@@ -574,6 +643,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         reloadState()
         checkPendingSetupDeferrals()
+        checkPendingSaves()
         if Date().timeIntervalSince(lastHeartbeat) >= 1 { publishNativeStatus() }
     }
 
@@ -632,17 +702,52 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    private func send(_ command: [String: Any]) {
+    private func checkPendingSaves() {
+        for (id, pending) in Array(pendingSaves) {
+            let url = options.runtime.appendingPathComponent("ack/\(id).json")
+            if let data = try? Data(contentsOf: url), data.count <= 4_194_304,
+               let ack = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               ack["requestId"] as? String == id {
+                pendingSaves.removeValue(forKey: id)
+                try? FileManager.default.removeItem(at: url)
+                pending.completion(ack["ok"] as? Bool == true ? nil : "Could not save the name. Please try again.")
+            } else if pending.deadline < Date() {
+                // Remove this queued request before allowing a newer name to
+                // be submitted. The single bridge processes requests serially:
+                // an already-read request finishes before the retry is handled.
+                // Cancellation cannot prove whether the old name was applied.
+                do {
+                    try FileManager.default.removeItem(at: pending.requestURL)
+                } catch let error as NSError {
+                    guard error.domain == NSCocoaErrorDomain,
+                          error.code == NSFileNoSuchFileError else { continue }
+                }
+                pendingSaves.removeValue(forKey: id)
+                pending.completion("Save unconfirmed. Check before retrying.")
+            }
+        }
+    }
+
+    private func send(_ command: [String: Any], completion: ((String?) -> Void)? = nil) {
         let inbox = options.runtime.appendingPathComponent("inbox", isDirectory: true).resolvingSymlinksInPath()
-        guard inbox.path.hasPrefix(options.runtime.path + "/") else { NSSound.beep(); return }
+        guard inbox.path.hasPrefix(options.runtime.path + "/") else {
+            completion?("Could not save the name. Please try again.")
+            NSSound.beep()
+            return
+        }
         var envelope = command
         let requestID = UUID().uuidString.lowercased()
         envelope["requestId"] = requestID
         do {
             let data = try JSONSerialization.data(withJSONObject: envelope, options: [.sortedKeys])
-            try data.write(to: inbox.appendingPathComponent(requestID + ".json"), options: [.atomic])
+            let requestURL = inbox.appendingPathComponent(requestID + ".json")
+            try data.write(to: requestURL, options: [.atomic])
+            if let completion = completion {
+                pendingSaves[requestID] = (Date().addingTimeInterval(8), requestURL, completion)
+            }
         } catch {
             bridgeError = "Could not save Pet preference. \(error.localizedDescription)"
+            completion?("Could not save the name. Please try again.")
             NSSound.beep()
         }
     }

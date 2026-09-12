@@ -55,7 +55,7 @@ For the supported `request_user_input_async` format, ask in Codex without creati
 - `question.origin: "codex-input-tool"` identifies an observed input call. `question.items` contains item identity, question text, and whether a correlated reply arrived; it never includes answer values.
 - `question.status: "awaiting_reply"` means at least one item still needs a reply. `awaiting_review` means all items have matching replies but the main agent has not reviewed them yet. Both states keep the report gate closed.
 - `pendingQuestions` holds unresolved observed calls. Resolving the current one can reveal another. Check the accepted report's resulting state before resuming work.
-- To resolve an observed question, provide its exact `resolveQuestionId` plus full `steps` and `currentStep`. Every item must already have a correlated reply. Read the actual answers in Codex, review their impact, and report the resulting roadmap; merely possessing the ID is insufficient.
+- To resolve an observed question, provide its exact `resolveQuestionId` plus full `steps` and `currentStep`. Every item must have a correlated card reply or an explicitly verified chat answer through `reviewFeedback`. Read the actual answers in Codex, review their impact, and report the resulting roadmap; merely possessing the ID is insufficient.
 - A correct resolution and a newly reported manual question may appear in one atomic report. If validation fails, the old question and state remain intact.
 - Restart and disable/re-enable preserve unresolved questions; completed call IDs are retained as replay protection. First adoption starts observing new input calls rather than reopening all historical questions.
 
@@ -70,3 +70,27 @@ To label optional setup, include `purpose: "setup", optional: true` on a manual 
 Pet offers **Not now** only for that optional setup. Its scoped `defer_setup` action checks the current binding generation and question ID. The bridge records a cancelled/deferred outcome and marks the roadmap for review. It does not grant a tool permission, mark a hook trusted, or send a continuation prompt. The main agent must review the deferred work before resuming, and other pending questions stay pending.
 
 Cancelled question calls retain replay protection; a late reply cannot revive them. The original question card may remain in Codex because this local adapter does not own Codex's card lifecycle. Do not ask a duplicate question to clear it.
+
+## Ordinary chat feedback
+
+Users may answer in the original conversation's composer instead of its question card. An observed ordinary user message after an open question creates `pet.feedback` with `questionId`, `sourceUserMessageId`, `observedAt`, and `status: "pending_review"`. This records message arrival only. It does not mark any question answered or allow work to resume, and it copies no message content into Pet state.
+
+Read that actual message in Codex and compare it with each pending question item. Then submit:
+
+```json
+{
+  "generation": 1,
+  "sequence": 4,
+  "reviewFeedback": {
+    "questionId": "input:call_example",
+    "sourceUserMessageId": "the-observed-message-id",
+    "answeredItemIndexes": [0]
+  }
+}
+```
+
+Use IDs and counters from fresh status, not these sample values. Indices identify only the items the message actually answers. An empty list records that you checked the message and it does not answer this question. The question stays pending; do not treat a status request, unrelated comment, or silence as an answer.
+
+A review-only report preserves the existing roadmap and waiting state. If the message completes all items, include `resolveQuestionId` and the full reviewed `steps` and `currentStep` in the same report to update the roadmap and continue atomically. Otherwise review the partial answer, leave the build waiting, and ask only for what is still missing. No need to make the user submit the same answer twice.
+
+The bridge validates current question and source-message identity and retains review provenance separately from card correlation. It cannot judge the meaning of a message; semantic verification remains the owning agent's responsibility. Read the returned state before proceeding, because another question may still be pending.

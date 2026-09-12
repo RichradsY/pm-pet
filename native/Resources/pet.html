@@ -36,6 +36,7 @@
 #pm-pet-desktop .pp-step[data-status=done] .pp-step-mark{color:var(--pp-green)}
 #pm-pet-desktop .pp-question{background:var(--pp-warm);border-radius:10px;padding:10px;margin-top:12px}
 #pm-pet-desktop .pp-question p{font-size:13px;margin:0 0 8px;line-height:1.5}
+#pm-pet-desktop .pp-question-hint{font-size:11px;line-height:1.45;margin:0 0 9px;color:var(--pp-ink);overflow-wrap:anywhere}
 #pm-pet-desktop .pp-question-label{display:block;font-size:11px;font-weight:500;margin-bottom:5px;color:var(--pp-ink)}
 #pm-pet-desktop .pp-return{width:100%;padding:7px 10px;border:1px solid var(--pp-line);border-radius:7px;background:var(--pp-paper);font-size:12px}
 #pm-pet-desktop .pp-settings{margin-top:12px;padding-top:9px;border-top:1px solid var(--pp-line)}
@@ -195,9 +196,17 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent
 #pm-pet-desktop .pp-pet:focus-visible{outline:2px solid var(--pp-accent)}
 #pm-pet-desktop .native-name,#pm-pet-desktop .native-quota .pp-usage-row,#pm-pet-desktop .native-quota .pp-unavailable,#pm-pet-desktop .pp-panel{background:var(--pp-glass-wash);border:1px solid var(--pp-glass-edge);box-shadow:inset 0 1px 0 var(--pp-glass-highlight),0 3px 8px var(--pp-glass-shadow)}
 #pm-pet-desktop .native-name{position:absolute;left:50%;transform:translateX(-50%);width:max-content;max-width:calc(100% - 20px);text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;top:120px;font-size:11px;line-height:16px;padding:2px 9px;border-radius:10px;color:var(--pp-ink)}
-#pm-pet-desktop .native-name::before{content:"";display:inline-block;width:5px;height:5px;margin:0 5px 1px 0;border-radius:50%;background:var(--pp-accent)}
+#pm-pet-desktop .native-name-label::before{content:"";display:inline-block;width:5px;height:5px;margin:0 5px 1px 0;border-radius:50%;background:var(--pp-accent)}
+#pm-pet-desktop .native-name-label{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;cursor:text;user-select:none}
+#pm-pet-desktop .native-name-label:focus-visible{outline:1px solid var(--pp-accent);outline-offset:-1px;border-radius:5px}
+#pm-pet-desktop .native-name[data-editing=true]{width:calc(100% - 20px);white-space:normal;padding:5px 8px;border-color:var(--pp-accent);border-radius:9px}
+#pm-pet-desktop .native-name-input{display:block;width:100%;min-width:0;border:0;border-radius:3px;background:transparent;color:var(--pp-ink);font:inherit;font-size:12px;line-height:18px;text-align:start;outline:none;user-select:text}
+#pm-pet-desktop .native-name-input[aria-invalid=true]{box-shadow:inset 0 -1px light-dark(#953b31,#ffb6a7)}
+#pm-pet-desktop .native-name-hint{display:block;font-size:10px;line-height:13px;color:var(--pp-muted);margin-top:3px;text-align:start;overflow-wrap:anywhere}
+#pm-pet-desktop .native-title{cursor:text}
 #pm-pet-desktop .native-needs{position:absolute;z-index:3;top:6px;left:50%;transform:translateX(-50%);font-size:10px;white-space:nowrap;background:light-dark(#fff0ca8c,#49371699);color:light-dark(#654410,#ffe3a3);border:1px solid light-dark(#d99c4033,#efc36d40);border-radius:12px;padding:1px 7px;cursor:pointer}
 #pm-pet-desktop .native-needs[data-kind=input]{background:light-dark(#ffe5de99,#512e2b99);color:light-dark(#953b31,#ffb6a7);border-color:light-dark(#c7523e38,#f28d7d40)}
+#pm-pet-desktop .native-needs[data-kind=review]{background:var(--pp-glass-wash);color:var(--pp-muted);border-color:var(--pp-glass-edge)}
 #pm-pet-desktop .native-roadmap{position:absolute;top:4px;left:50%;transform:translateX(-50%);display:flex;align-items:center;justify-content:center;gap:1px;width:max-content;max-width:calc(100% - 12px);height:28px;z-index:3;--dot-done:#79b990;--dot-current:#246947;--dot-pending:#b0bab4;--dot-decision:#e7b64e;--dot-input:#d35b52}
 #pm-pet-desktop .mini-step{display:grid;place-items:center;flex:none;width:17px;height:26px;border:0;border-radius:6px;background:transparent;padding:0;cursor:pointer}
 #pm-pet-desktop .mini-dot{display:block;width:8px;height:8px;border-radius:50%;background:var(--dot-pending);box-shadow:inset 0 0 0 1px #35513e19;pointer-events:none}
@@ -214,6 +223,8 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent
 #pm-pet-desktop .pp-panel[data-attention=input] .pp-question{background:light-dark(#d5664b14,#ee937d12);border-color:light-dark(#bd52422e,#ed998033)}
 #pm-pet-desktop .pp-panel[data-attention=input] .pp-question-label{color:light-dark(#9a4036,#f2a599)}
 #pm-pet-desktop .pp-panel[data-attention=input] .pp-progress-fill{background:var(--pp-low)}
+#pm-pet-desktop .pp-panel[data-attention=review] .pp-question{background:light-dark(#72977b0b,#a2c4a40a);border-color:var(--pp-line)}
+#pm-pet-desktop .pp-panel[data-attention=review] .pp-progress-fill{background:var(--pp-accent)}
 #pm-pet-desktop .native-input-hint{font-size:11px;line-height:1.45;color:var(--pp-muted);margin:0 0 9px}
 #pm-pet-desktop .pp-step[data-status=current]{color:var(--pp-green)}
 #pm-pet-desktop .pp-step[data-status=decision]{color:var(--pp-mid)}
@@ -226,6 +237,7 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent
 #pm-pet-desktop .native-quota .pp-usage-row{width:max-content;max-width:100%;gap:6px;flex-wrap:nowrap;align-items:center;margin:0 auto;padding:3px 7px;border-radius:10px}
 #pm-pet-desktop .native-quota .pp-usage-pill{padding:0;font-size:11px;gap:5px;background:transparent;box-shadow:none}
 #pm-pet-desktop .native-quota .pp-usage-pill strong{padding:0 4px}
+#pm-pet-desktop .quota-cache-mark{font-size:8px;line-height:0;vertical-align:super;margin-left:1px;color:var(--pp-muted)}
 #pm-pet-desktop .native-quota .pp-unavailable{display:inline-flex;padding:3px 7px;font-size:11px;border-radius:10px}
 #pm-pet-desktop .native-freshness{font-size:9px;line-height:14px;color:var(--pp-muted);margin:4px 0 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #pm-pet-desktop .native-quota-close{border:0;background:transparent;color:var(--pp-muted);font-size:15px;padding:0 3px;line-height:19px;border-radius:5px}
@@ -239,6 +251,9 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent
 #pm-pet-desktop .pp-progress-fill{background:var(--pp-accent)}
 #pm-pet-desktop .pp-question{background:light-dark(#efc57421,#f5c57816);border:1px solid light-dark(#ab781d26,#eec77833);border-radius:12px}
 #pm-pet-desktop .pp-question p{font-size:12px;overflow-wrap:anywhere}
+#pm-pet-desktop .pp-question-meta{display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:5px}
+#pm-pet-desktop .pp-question-meta .pp-question-label{margin:0}
+#pm-pet-desktop .pp-question-count{font-size:10px;line-height:1.4;color:var(--pp-muted)}
 #pm-pet-desktop .pp-panel[data-waiting=true]{display:flex;flex-direction:column;overflow:hidden}
 #pm-pet-desktop .pp-panel[data-waiting=true]>:not(.pp-road){flex:none}
 #pm-pet-desktop .pp-panel[data-waiting=true] .pp-question{margin:10px 0 12px}
@@ -279,12 +294,12 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent
     <span class="pp-baby" data-agent="one" data-phase="none" aria-hidden="true" hidden><span class="pp-chick"><span class="pp-chick-eyes"></span><span class="pp-chick-beak"></span><span class="pp-chick-wing"></span><span class="pp-chick-wing pp-right"></span><span class="pp-chick-feet"></span></span><span class="pp-shell pp-shell-top"></span><span class="pp-shell pp-shell-bottom"></span><span class="pp-baby-done">✓</span></span>
     <span class="pp-baby" data-agent="two" data-phase="none" aria-hidden="true" hidden><span class="pp-chick"><span class="pp-chick-eyes"></span><span class="pp-chick-beak"></span><span class="pp-chick-wing"></span><span class="pp-chick-wing pp-right"></span><span class="pp-chick-feet"></span></span><span class="pp-shell pp-shell-top"></span><span class="pp-shell pp-shell-bottom"></span><span class="pp-baby-done">✓</span></span>
 </button>
-<div class="native-name">Codex conversation</div>
-<div class="native-quota" hidden><div class="pp-usage-row"></div><div class="pp-unavailable" hidden><span>Usage unavailable</span><button class="native-quota-close" aria-label="Hide usage">×</button></div><div class="native-freshness"></div></div>
+<div class="native-name"><span class="native-name-label" role="button" tabindex="0" aria-label="Rename Pet. Double-click or press Enter.">Codex conversation</span><input class="native-name-input" type="text" aria-label="Pet name" aria-describedby="pet-name-hint" autocomplete="off" spellcheck="false" dir="auto" hidden><span class="native-name-hint" id="pet-name-hint" role="status" hidden></span></div>
+<div class="native-quota" role="group" aria-label="Remaining account quota" hidden><div class="pp-usage-row"></div><div class="pp-unavailable" hidden><span>Usage unavailable</span><button class="native-quota-close" aria-label="Hide usage">×</button></div><div class="native-freshness" id="quota-freshness"></div></div>
 </section>
 <section data-surface="panel" hidden><div class="pp-panel" role="region" aria-label="Build progress">
 <div class="pp-header"><span class="native-title"></span><div class="pp-header-right"><span class="native-phase"></span><button class="pp-close" aria-label="Hide progress">×</button></div></div>
-<div class="pp-question" hidden><span class="pp-question-label">Your decision</span><p tabindex="0" aria-label="Question details"></p><div class="native-input-hint" hidden></div><div class="pp-question-actions"><button class="pp-return">Answer in Codex ↗</button><button class="pp-defer-setup" type="button" hidden>Not now</button></div><div class="pp-setup-feedback" role="status" hidden></div></div>
+<div class="pp-question" hidden><div class="pp-question-meta" role="status" aria-live="polite" aria-atomic="true"><span class="pp-question-label">Waiting for your reply</span><span class="pp-question-count" hidden></span></div><p tabindex="0" aria-label="Question details"></p><div class="pp-question-hint" id="question-reply-hint" hidden></div><div class="native-input-hint" hidden></div><div class="pp-question-actions"><button class="pp-return">Answer in Codex ↗</button><button class="pp-defer-setup" type="button" hidden>Not now</button></div><div class="pp-setup-feedback" role="status" hidden></div></div>
 <div class="pp-title"></div><div class="native-no-plan">No roadmap reported</div>
 <div class="pp-progress" hidden><div class="pp-progress-meta"><span class="pp-progress-count"></span><span class="pp-progress-percent"></span></div><div class="pp-progress-track" role="progressbar" aria-label="Roadmap completion" aria-valuemin="0" aria-valuemax="100"><span class="pp-progress-fill"></span></div></div>
 <details class="pp-road" hidden><summary>View roadmap</summary><ol></ol></details>
@@ -301,36 +316,120 @@ const send=body=>window.webkit?.messageHandlers?.pet?.postMessage(body);
 const owl=$('.pp-pet');
 const themes={sage:['#638f7c','#e1eee5','#80a88f','#86ad95'],sky:['#628faf','#deebf5','#83a4bd','#8faec5'],lilac:['#9b7baf','#efe6f6','#aa92b7','#b49fc0'],rose:['#b27889','#f6e4e9','#c38e8c','#c99b99'],sand:['#aa8960','#f3eada','#b89a72','#c7a981']};
 let priorPet=null,magicTimer=null,currentPet=null,clickTimer=null,miniSignature='',displayedQuestionKey=null;
+const nameBox=$('.native-name'),nameLabel=$('.native-name-label'),nameInput=$('.native-name-input'),nameHint=$('.native-name-hint');
+let editingName=false,savingName=false,composingName=false;
+function renderName(title){nameLabel.textContent=title;nameLabel.title=title+' · Double-click to rename';nameLabel.setAttribute('aria-label',title+'. Rename Pet. Double-click or press Enter.');text('.native-title',title);$('.native-title').title='Double-click to rename Pet';}
+function nameFeedback(message,invalid=false){nameHint.textContent=message;nameInput.setAttribute('aria-invalid',String(invalid));measure();}
+window.beginNameEdit=function(){
+ if(surface!=='owl'||editingName)return;
+ editingName=true;nameBox.dataset.editing='true';nameLabel.hidden=true;nameInput.hidden=false;nameHint.hidden=false;
+ nameInput.value=currentPet?.title||'Codex conversation';nameFeedback('Enter to save · Esc to cancel');nameInput.focus();nameInput.select();measure();
+};
+function endNameEdit(){
+ if(savingName)return;
+ editingName=false;composingName=false;nameBox.dataset.editing='false';nameInput.hidden=true;nameHint.hidden=true;nameLabel.hidden=false;
+ renderName(currentPet?.title||'Codex conversation');send({action:'endNameEdit'});measure();
+}
+function saveName(){
+ if(!editingName||savingName||composingName)return;
+ const title=nameInput.value.trim();
+ if(!title||Array.from(title).length>100){nameFeedback(!title?'Enter a name.':'Use 100 characters or fewer.',true);return;}
+ if(title===currentPet?.title){endNameEdit();return;}
+ savingName=true;nameInput.readOnly=true;nameInput.setAttribute('aria-busy','true');nameFeedback('Saving…');send({action:'saveName',title});
+}
+window.finishNameSave=function(result){
+ if(!savingName)return;
+ savingName=false;nameInput.readOnly=false;nameInput.removeAttribute('aria-busy');
+ if(result.ok){currentPet={...currentPet,title:result.title};endNameEdit();}
+ else{nameFeedback(result.error||'Could not save the name. Please try again.',true);}
+};
+nameLabel.addEventListener('dblclick',e=>{e.preventDefault();e.stopPropagation();send({action:'beginNameEdit'});});
+$('.native-title').addEventListener('dblclick',e=>{e.preventDefault();send({action:'beginNameEdit'});});
+nameLabel.addEventListener('keydown',e=>{if(['Enter',' ','F2'].includes(e.key)){e.preventDefault();send({action:'beginNameEdit'});}});
+nameInput.addEventListener('keydown',e=>{e.stopPropagation();if(e.isComposing||e.keyCode===229||composingName)return;if(e.key==='Enter'){e.preventDefault();saveName();}else if(e.key==='Escape'){e.preventDefault();endNameEdit();}});
+nameInput.addEventListener('compositionstart',()=>{composingName=true;});
+nameInput.addEventListener('compositionend',()=>{composingName=false;if(document.activeElement!==nameInput)saveName();});
+nameInput.addEventListener('input',()=>{if(!savingName)nameFeedback('Enter to save · Esc to cancel');});
+nameInput.addEventListener('blur',saveName);
 const childSlots=Array.from(root.querySelectorAll('.pp-baby'),el=>({el,id:null,timer:null,remaining:0,startedAt:0,complete:null}));
 let childrenPaused=false;
-function text(selector,value){$(selector).textContent=value??''}
-function observedDate(value){if(value===null||value===undefined||value==='')return null;const d=new Date(typeof value==='number'?(value<1e12?value*1000:value):value);return Number.isNaN(d.getTime())?null:d;}
+function text(selector,value){const el=$(selector),next=String(value??'');if(el.textContent!==next)el.textContent=next;}
 function dateText(value){const d=observedDate(value);return d?d.toLocaleDateString('en-GB',{month:'short',day:'numeric'})+' '+d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'';}
 function dateTooltip(value){return observedDate(value)?.toISOString()||'';}
 /* PET_STATE_START */
+function observedDate(value){if(value===null||value===undefined||value==='')return null;const d=new Date(typeof value==='number'?(value<1e12?value*1000:value):value);return Number.isNaN(d.getTime())?null:d;}
+function quotaState(q,p,now=Date.now()){
+ const windows=[];
+ for(const [key,label] of [['five','5h'],['week','Weekly']]){
+  const window=q?.windows?.[key];if(!window||!Number.isFinite(window.remainingPercent))continue;
+  const value=Math.round(Math.max(0,Math.min(100,window.remainingPercent)));
+  windows.push({key,label,value,tone:value<=20?'low':value<70?'mid':'high'});
+ }
+ const date=observedDate(q?.observedAt),timestamp=date?.getTime()??null;
+ const ageMs=timestamp!==null&&Number.isFinite(now)&&timestamp<=now?now-timestamp:null;
+ const minutes=ageMs===null?null:Math.floor(ageMs/60000);
+ const ageLabel=minutes===null?'age unknown':minutes<1?'just now':minutes<60?minutes+'m ago':minutes<1440?Math.floor(minutes/60)+'h ago':Math.floor(minutes/1440)+'d ago';
+ const stale=ageMs===null||ageMs>300000;
+ const source=String(q?.source||'');
+ const provenance=source==='codex-cli-verified'?'Auto':source==='codex-desktop-account'||source.includes('app-server')||source.includes('account')?'Account':source.includes('transcript')||source.includes('session')?'Chat':'Snapshot';
+ const observedAt=date?.toISOString()||null;
+ const refresh=q?.refresh,refreshMode=['automatic','refreshing','paused','waiting_for_account','error'].includes(refresh?.mode)?refresh.mode:null;
+ const intervalSeconds=Number.isFinite(refresh?.intervalSeconds)&&refresh.intervalSeconds>0?refresh.intervalSeconds:null;
+ const nextAttemptAt=observedDate(refresh?.nextAttemptAt)?.toISOString()||null;
+ const errorCode=typeof refresh?.errorCode==='string'?refresh.errorCode:null;
+ const accountCheckNeeded=refreshMode==='waiting_for_account'||refreshMode==='error'&&['account_mismatch','account_changed','auth_metadata_unavailable','auth_required','invalid_fingerprint'].includes(errorCode);
+ const retryPending=refreshMode==='error'&&!accountCheckNeeded&&nextAttemptAt!==null;
+ const refreshLabel=accountCheckNeeded?'Account check':refreshMode==='error'?(retryPending?'Retry':'Check failed'):refreshMode==='refreshing'?'Checking':refreshMode==='paused'?'Paused':null;
+ const freshness=windows.length?'Remaining · '+(refreshLabel||(stale?'Cached':provenance))+' · '+ageLabel:accountCheckNeeded?'Account check needed':refreshMode==='refreshing'?'Checking usage':refreshMode==='paused'?'Usage checks paused':refreshMode==='error'?(retryPending?'Usage check failed · Retry pending':'Usage check failed'):'Waiting for usage';
+ const cadence=['automatic','refreshing','error'].includes(refreshMode)?intervalSeconds===60?'Checks every 60 seconds while working. ':intervalSeconds===300?'Checks every 5 minutes while idle. ':intervalSeconds!==null?'Checks every '+intervalSeconds+' seconds. ':refreshMode==='automatic'?'Automatic usage checks are enabled. ':'':'';
+ const refreshDetail=accountCheckNeeded?'Check current usage in Codex to verify the account match. ':refreshMode==='refreshing'?'A usage check is in progress. ':refreshMode==='paused'?'Automatic usage checks are paused. ':refreshMode==='error'?(retryPending?'The last usage check failed. Retry pending. ':'The last usage check failed; no retry is scheduled. '):'';
+ const reason=refreshMode==='error'?({account_mismatch:'The CLI account does not match the last Desktop account check. ',account_changed:'The account changed during the usage check. ',auth_metadata_unavailable:'Account metadata could not be checked. ',auth_required:'Sign in to Codex before checking usage. ',codex_not_found:'The Codex CLI could not be found. ',timeout:'The usage check timed out. ',rate_limited:'The usage check was rate limited. '}[errorCode]||''):'';
+ const tooltip=(windows.length?'Remaining account quota. '+(stale?'Cached snapshot. ':'Recorded snapshot. '):'No quota values are available. ')+(source==='codex-cli-verified'?'Codex CLI, matched to the last Desktop account check. ':'')+(observedAt?'Observed '+observedAt+'. ':windows.length?'Snapshot time unavailable. ':'')+cadence+refreshDetail+reason+(retryPending?'Next attempt '+nextAttemptAt+'. ':'')+'Ask Codex to check current usage.';
+ return {visible:!!p.quotaVisible,windows,stale,ageMs,ageLabel,observedAt,provenance,refreshMode,intervalSeconds,nextAttemptAt,accountCheckNeeded,retryPending,freshness,tooltip};
+}
 function attentionKind(p){return p.question?(p.question.kind==='input'?'input':'decision'):null;}
 function questionState(p){
  const question=p.question;if(!question)return null;
- const reviewing=question.status==='awaiting_review';
- const status=reviewing?'awaiting_review':'awaiting_reply';
- const items=Array.isArray(question.items)?question.items:[];
- const item=reviewing?null:items.find(item=>item&&item.answered!==true);
+ const replyReview=question.status==='awaiting_review';
+ const feedback=p.feedback;
+ const messageReview=!replyReview&&feedback?.status==='pending_review'&&feedback.questionId===question.id&&typeof feedback.sourceUserMessageId==='string'&&feedback.sourceUserMessageId.length>0;
+ const reviewing=replyReview||messageReview;
+ const status=replyReview?'awaiting_review':messageReview?'pending_review':'awaiting_reply';
+ const items=Array.isArray(question.items)?question.items.filter(item=>item&&typeof item==='object'):[];
+ const item=replyReview?null:items.find(item=>item.answered!==true);
  const itemIndex=item?(Number.isInteger(item.index)?item.index:items.indexOf(item)):null;
  const itemID=item?.questionItemId??null;
+ const itemPosition=item?items.indexOf(item)+1:null;
+ const itemCount=items.length,answeredCount=items.filter(item=>item.answered===true).length;
  const kind=attentionKind(p);
  const destination=['codex','system','terminal'].includes(question.destination)?question.destination:'codex';
  const setup=question.purpose==='setup';
  const optionalSetup=setup&&question.optional===true;
+ const itemLabel=itemPosition&&itemCount>1?'Question '+itemPosition+' of '+itemCount:'';
+ const receiptCount=answeredCount&&itemCount>1?answeredCount+' of '+itemCount+' replies received':'';
  return {
-  key:JSON.stringify([p.id,p.generation,question.id,itemIndex,itemID,status,setup,optionalSetup]),
-  status,reviewing,kind,destination,itemIndex,setup,optionalSetup,
+  key:JSON.stringify([p.id,p.generation,question.id,itemIndex,itemID,status,setup,optionalSetup,messageReview?feedback.sourceUserMessageId:null]),
+  actionableKey:reviewing?null:JSON.stringify([p.id,p.generation,question.id,itemIndex,itemID]),
+  status,reviewing,reviewKind:replyReview?'reply':messageReview?'message':null,kind,destination,itemIndex,itemPosition,itemCount,answeredCount,setup,optionalSetup,
   attention:reviewing?'review':kind,
   text:item?.text||question.text||'',
+  label:replyReview?'Reply received':messageReview?'Message received':optionalSetup?'Optional setup':itemLabel||(kind==='input'?'Information needed':'Waiting for your reply'),
+  countLabel:receiptCount||(reviewing?itemLabel:''),
+  reviewCopy:messageReview?'Codex needs to check whether your message answers this question.':replyReview?'Codex needs to review your reply before continuing.':'',
+  replyHint:!reviewing&&!setup&&destination==='codex'?(p.turnState?.status==='ended'?'This turn has ended. Reply in Codex to continue.':p.turnState?.status==='interrupted'?'This turn was stopped. Reply in Codex when you are ready.':question.origin==='codex-input-tool'?'Reply in the question card or this Codex chat to continue.':'Send your reply in this Codex chat to continue.'):'',
   canAnswer:!reviewing,
-  canDefer:optionalSetup&&!reviewing,
+  canDefer:optionalSetup&&!replyReview,
   showDestinationHint:!reviewing&&kind==='input'&&destination!=='codex',
   action:reviewing||setup||kind==='input'&&destination!=='codex'?'open_codex':kind==='input'?'provide_info':'answer'
  };
+}
+function phaseLabel(p){
+ const turn=p.turnState?.status,question=questionState(p);
+ if(turn==='ended')return 'Turn ended';
+ if(turn==='interrupted')return 'Turn stopped';
+ if(question)return question.reviewing?'Awaiting review':question.setup?'Setup needed':question.kind==='input'?'Input needed':'Waiting for you';
+ if(p.roadmapNeedsUpdate)return 'Planning';
+ return ({building:'Building',running:'Building',planning:'Planning',checking:'Checking',waiting:'Needs you',complete:'Complete',completed:'Complete',idle:'Idle',paused:'Paused',error:'Source error'}[p.phase]||'Connected');
 }
 function setupDeferRequest(p){
  const question=questionState(p);
@@ -367,7 +466,7 @@ function roadmapState(p,limit=7){
  const pending=steps.filter(step=>!step.done);
  const candidate=pending.find(step=>step.id===p.currentStepId)||pending.find(step=>step.label===p.currentStep)||pending[0];
  const blocked=p.question?(pending.find(step=>step.id===p.question.stepId)||candidate):null;
- const working=['planning','building','running','checking'].includes(p.phase)&&!['disconnected','unavailable','error'].includes(p.sourceStatus);
+ const working=['planning','building','running','checking'].includes(p.phase)&&!['ended','interrupted'].includes(p.turnState?.status)&&!['disconnected','unavailable','error'].includes(p.sourceStatus);
  const current=!p.roadmapNeedsUpdate&&!p.question&&working?candidate:null;
  const all=steps.map((step,index)=>({...step,index,status:step.done?'done':step.id===blocked?.id?question.attention:step.id===current?.id?'current':'pending'}));
  const focus=blocked||candidate;
@@ -377,10 +476,11 @@ function roadmapState(p,limit=7){
 }
 function compactRoadmap(p){
  const model=roadmapState(p),question=questionState(p),kind=question?.attention;
- if(kind&&!model.visible.some(step=>step.status===kind))return {...model,visible:[{id:'attention',label:question.reviewing?'Reviewing reply':question.text,status:kind}],before:0,after:0};
+ if(kind&&!model.visible.some(step=>step.status===kind))return {...model,visible:[{id:'attention',label:question.reviewing?'Awaiting review':question.text,status:kind}],before:0,after:0};
  if(model.reviewing&&!kind)return {...model,visible:[{id:'review',label:'Reviewing your new request',status:'review'}],before:0,after:0};
  return model;
 }
+function activity(p){return questionState(p)?.reviewing?'idle':p.question?'attention':['ended','interrupted'].includes(p.turnState?.status)||['unavailable','disconnected','error'].includes(p.sourceStatus)?'idle':({waiting:'attention',paused:'idle',building:'reading',running:'reading',planning:'reading',checking:'reading',complete:'complete',completed:'complete'}[p.phase]||'idle');}
 /* PET_STATE_END */
 let setupAttempt=null,setupTimer=null,setupSequence=0;
 function renderSetupDeferral(){
@@ -408,11 +508,10 @@ $('.pp-defer-setup').onclick=()=>{
  try{send({...setupDeferRequest(currentPet),requestToken:setupAttempt.token});}
  catch{window.finishSetupDefer({ok:false,questionId:setupAttempt.questionId,generation:setupAttempt.generation,requestToken:setupAttempt.token});}
 };
-function activity(p){return p.question?'attention':['unavailable','disconnected','error'].includes(p.sourceStatus)?'idle':({waiting:'attention',paused:'idle',building:'reading',running:'reading',planning:'reading',checking:'reading',complete:'complete',completed:'complete'}[p.phase]||'idle');}
 function updateAnimation(p){
  const next=activity(p);const completed=completedTransitions(priorPet,p);const mini=$('.native-roadmap');
  if(priorPet?.id!==p.id||priorPet?.generation!==p.generation){clearTimeout(magicTimer);magicTimer=null;mini.classList.remove('is-celebrating');}
- if(next==='attention'||p.roadmapNeedsUpdate){clearTimeout(magicTimer);magicTimer=null;owl.dataset.activity=next;mini.classList.remove('is-celebrating');}
+ if(p.question||next==='attention'||p.roadmapNeedsUpdate){clearTimeout(magicTimer);magicTimer=null;owl.dataset.activity=next;mini.classList.remove('is-celebrating');}
  else if(completed.length){clearTimeout(magicTimer);owl.dataset.activity='magic';mini.classList.remove('is-celebrating');requestAnimationFrame(()=>{if(currentPet&&!currentPet.question&&!currentPet.roadmapNeedsUpdate&&magicTimer)mini.classList.add('is-celebrating')});magicTimer=setTimeout(()=>{owl.dataset.activity=activity(currentPet);mini.classList.remove('is-celebrating');magicTimer=null},1250);}
  else if(!magicTimer)owl.dataset.activity=next;
  owl.classList.toggle('pp-attention',next==='attention');owl.classList.toggle('pp-planning',next==='planning');owl.classList.toggle('pp-checking',next==='checking');
@@ -424,7 +523,7 @@ function renderMini(p,panelVisible){
  const items=model.visible;
  const signature=JSON.stringify([items,model.before,model.after,model.reviewing,kind,question?.setup]);
  if(signature===miniSignature)return;miniSignature=signature;row.replaceChildren();
- const names={done:'Completed',current:'In progress',pending:'Not started',decision:question?.setup?'Setup needed':'Feedback needed',input:question?.setup?'Setup needed':'Information needed',review:question?.reviewing?'Reviewing reply':'Reviewing request'};
+ const names={done:'Completed',current:'In progress',pending:'Not started',decision:question?.setup?'Setup needed':'Waiting for you',input:question?.setup?'Setup needed':'Information needed',review:question?.reviewing?'Awaiting review':'Reviewing request'};
  function button(label,status,index,overflow){
   const b=document.createElement('button');b.type='button';b.className='mini-step'+(overflow?' mini-overflow':'');b.dataset.status=status;b.title=label+' · Open roadmap';b.setAttribute('aria-label',b.title);b.style.setProperty('--dot-index',index);
   if(overflow)b.textContent=overflow;else{const dot=document.createElement('span');dot.className='mini-dot';dot.setAttribute('aria-hidden','true');b.append(dot)}
@@ -480,25 +579,40 @@ function renderChildren(p){
  const extra=active.length-represented;let more=$('.native-more');
  if(extra>0){if(!more){more=document.createElement('span');more.className='native-more';owl.append(more)}more.textContent='+'+extra;more.title=active.length+' subagents';}else more?.remove();
 }
-function quota(q,p){
- const wrap=$('.native-quota');wrap.hidden=!p.quotaVisible;if(wrap.hidden)return;
- const row=wrap.querySelector('.pp-usage-row');row.replaceChildren();
- let count=0;
- for(const [key,label] of [['five','5h'],['week','Weekly']]){
-  const window=q?.windows?.[key];if(!window||!Number.isFinite(window.remainingPercent))continue;
-  const value=Math.round(Math.max(0,Math.min(100,window.remainingPercent)));
-  const pill=document.createElement('span');pill.className='pp-usage-pill';pill.dataset.tone=value<=20?'low':value<70?'mid':'high';pill.title=label+' account quota remaining';
-  const name=document.createElement('span');name.textContent=label;
-  const strong=document.createElement('strong');strong.textContent=value+'%';pill.append(name,strong);row.append(pill);count++;
+/* PET_QUOTA_VIEW_START */
+let currentQuota=null,quotaTimer=null,quotaSignature='';
+function renderQuota(q,p){
+ const model=quotaState(q,p),wrap=$('.native-quota');wrap.hidden=!model.visible;if(wrap.hidden)return model;
+ const row=wrap.querySelector('.pp-usage-row'),signature=JSON.stringify(model.windows);
+ if(signature!==quotaSignature){
+  quotaSignature=signature;row.replaceChildren();
+  for(const entry of model.windows){
+   const pill=document.createElement('span');pill.className='pp-usage-pill';pill.dataset.tone=entry.tone;pill.setAttribute('role','img');pill.setAttribute('aria-describedby','quota-freshness');
+   const name=document.createElement('span');name.textContent=entry.label;
+   const strong=document.createElement('strong');strong.textContent=entry.value+'%';
+   const mark=document.createElement('sup');mark.className='quota-cache-mark';mark.textContent='*';mark.setAttribute('aria-hidden','true');strong.append(mark);
+   pill.append(name,strong);row.append(pill);
+  }
+  if(model.windows.length){const close=document.createElement('button');close.className='native-quota-close';close.textContent='×';close.setAttribute('aria-label','Hide usage');close.onclick=()=>send({action:'hideQuota'});row.append(close)}
  }
- row.hidden=!count;
- if(count){const close=document.createElement('button');close.className='native-quota-close';close.textContent='×';close.setAttribute('aria-label','Hide usage');close.onclick=()=>send({action:'hideQuota'});row.append(close)}
- wrap.querySelector('.pp-unavailable').hidden=count>0;
- const time=dateText(q?.observedAt);const source=String(q?.source||'');
- const from=source.includes('transcript')||source.includes('session')?'From chat':source.includes('app-server')||source.includes('account')?'Account update':source?'Cached usage':'Waiting for usage';
- wrap.querySelector('.native-freshness').textContent=from+(time?' · '+time:'');
- wrap.querySelector('.native-freshness').title=dateTooltip(q?.observedAt);
+ row.hidden=!model.windows.length;
+ row.querySelectorAll('.pp-usage-pill').forEach((pill,index)=>{
+  const entry=model.windows[index];pill.dataset.stale=String(model.stale);pill.querySelector('.quota-cache-mark').hidden=!model.stale;
+  const label=entry.label+' account quota remaining: '+entry.value+'%. '+(model.stale?'Cached snapshot, ':'Recorded snapshot, ')+model.ageLabel+'.';
+  pill.setAttribute('aria-label',label);pill.title=label+' '+model.tooltip;
+ });
+ wrap.querySelector('.pp-unavailable').hidden=model.windows.length>0;
+ text('.native-freshness',model.freshness);wrap.querySelector('.native-freshness').title=model.tooltip;
+ measure();
+ return model;
 }
+function quota(q,p){
+ currentQuota=q;
+ const model=renderQuota(q,p),needsClock=surface==='owl'&&model.visible&&model.windows.length>0;
+ if(needsClock&&quotaTimer===null)quotaTimer=setInterval(()=>{if(currentPet)renderQuota(currentQuota,currentPet);},30000);
+ else if(!needsClock&&quotaTimer!==null){clearInterval(quotaTimer);quotaTimer=null;}
+}
+/* PET_QUOTA_VIEW_END */
 let measureFrame=null,lastGlass='';
 function measure(){
  if(measureFrame!==null)return;
@@ -521,24 +635,26 @@ window.renderPet=function(data){
  const p=data.pet||{};currentPet=p;
  const colors=themes[p.theme]||themes.sage;root.style.setProperty('--pp-accent',colors[0]);root.style.setProperty('--pp-accent-bg',colors[1]);root.style.setProperty('--pp-fur','light-dark('+colors[2]+','+colors[3]+')');
  const scale=Math.max(.75,Math.min(1.5,(Number(p.size)||100)/100));const inset=Number(data.topInset)||24;owl.style.transform='scale('+scale+')';owl.style.top=(14+inset)+'px';$('.native-name').style.top=(104*scale+15+inset)+'px';
- $('.native-name').textContent=p.title||'Codex conversation';$('.native-name').title=p.title||'Codex conversation';
+ renderName(p.title||'Codex conversation');
  const question=questionState(p),kind=question?.kind,attention=question?.attention;owl.dataset.attention=attention||'';$('.native-needs').dataset.kind=attention||'';
- owl.setAttribute('aria-expanded',String(!!data.panelVisible));$('.native-needs').hidden=!kind||!data.panelVisible;text('.native-needs',question?.reviewing?'Reviewing reply':question?.setup?'Setup needed':kind==='input'?'Input needed':'Feedback needed');
+ owl.setAttribute('aria-expanded',String(!!data.panelVisible));$('.native-needs').hidden=!kind||!data.panelVisible;text('.native-needs',question?.reviewing?'Awaiting review':question?.setup?'Setup needed':kind==='input'?'Input needed':'Waiting for you');
  renderMini(p,data.panelVisible);updateAnimation(p);renderChildren(p);quota(data.quota,p);
  text('.native-title',p.title||'Codex conversation');
  const reviewing=!!p.roadmapNeedsUpdate;
- text('.native-phase',question?.reviewing?'Reviewing reply':question?.setup?'Setup needed':kind==='input'?'Input needed':kind?'Feedback needed':reviewing?'Planning':({building:'Building',running:'Building',planning:'Planning',checking:'Checking',waiting:'Needs you',complete:'Complete',completed:'Complete',idle:'Idle',paused:'Paused',error:'Source error'}[p.phase]||'Connected'));
+ text('.native-phase',phaseLabel(p));
  text('.pp-title',reviewing?'Reviewing your new request':p.currentStep||'');$('.pp-title').hidden=!!kind||(!reviewing&&!p.currentStep);
  const progress=p.progress;const known=!reviewing&&progress&&Number.isFinite(progress.done)&&Number.isFinite(progress.total)&&progress.total>0;
  $('.native-no-plan').hidden=!!known;$('.pp-progress').hidden=!known;
- text('.native-no-plan',reviewing?'Updating the roadmap before showing new progress.':'No roadmap reported');
+ text('.native-no-plan',reviewing?(question?.reviewing?'Roadmap is waiting for review.':question?'Roadmap will update after this question is reviewed.':'Updating the roadmap before showing new progress.'):'No roadmap reported');
  if(known){const percent=Math.round(Math.min(100,Math.max(0,100*progress.done/progress.total)));text('.pp-progress-count',progress.done+' of '+progress.total+' steps done');text('.pp-progress-percent',percent+'%');$('.pp-progress-fill').style.width=percent+'%';$('.pp-progress-track').setAttribute('aria-valuenow',String(percent));}
  const steps=Array.isArray(p.steps)?p.steps:[];$('.pp-road').hidden=!steps.length;text('.pp-road summary',reviewing?'Previous roadmap':'View roadmap');const ol=$('.pp-road ol');ol.replaceChildren();
  roadmapState(p).all.forEach(step=>{const li=document.createElement('li');li.className='pp-step';li.dataset.status=step.status;const mark=document.createElement('span');mark.className='pp-step-mark';mark.textContent=({done:'✓',current:'›',decision:'?',input:'!'})[step.status]||'○';const label=document.createElement('span');label.textContent=step.label||'';li.append(mark,label);ol.append(li)});
- $('.pp-question').hidden=!question;text('.pp-question p',question?.reviewing?'Waiting for Codex to review your reply.':question?.text||'');$('.pp-panel').dataset.waiting=String(!!question);$('.pp-panel').dataset.attention=attention||'';
- text('.pp-question-label',question?.reviewing?'Reviewing reply':question?.optionalSetup?'Optional setup':kind==='input'?'Information needed':'Your decision');
+ $('.pp-question').hidden=!question;text('.pp-question p',question?.reviewing?question.reviewCopy:question?.text||'');$('.pp-panel').dataset.waiting=String(!!question);$('.pp-panel').dataset.attention=attention||'';
+ text('.pp-question-label',question?.label||'Waiting for your reply');text('.pp-question-count',question?.countLabel||'');$('.pp-question-count').hidden=!question?.countLabel;
+ $('.pp-question-hint').hidden=!question?.replyHint;text('.pp-question-hint',question?.replyHint||'');
+ if(question?.replyHint)$('.pp-return').setAttribute('aria-describedby','question-reply-hint');else $('.pp-return').removeAttribute('aria-describedby');
  $('.native-input-hint').hidden=!question?.showDestinationHint;text('.native-input-hint',question?.destination==='system'?'Input location · System window':'Input location · Terminal');
- text('.pp-return',({open_codex:'Open Codex ↗',provide_info:'Provide info in Codex ↗',answer:'Answer in Codex ↗'})[question?.action]||'Open Codex ↗');
+ text('.pp-return',({open_codex:'Open Codex ↗',provide_info:'Provide info in Codex ↗',answer:'Open Codex to reply ↗'})[question?.action]||'Open Codex ↗');
  const nextSetupAttempt=setupDeferralState(setupAttempt,{type:'sync',pet:p});
  if(nextSetupAttempt!==setupAttempt){clearTimeout(setupTimer);setupAttempt=nextSetupAttempt;}
  renderSetupDeferral();
@@ -557,6 +673,6 @@ owl.addEventListener('pointerup',e=>{if(!start)return;send({action:'dragEnd'});s
 owl.addEventListener('pointercancel',()=>{if(start)send({action:'dragEnd'});start=null;});
 owl.addEventListener('dblclick',e=>{e.preventDefault();clearTimeout(clickTimer);send({action:'openConversation'});});
 owl.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();send({action:'togglePanel'});}});
-root.addEventListener('contextmenu',e=>{e.preventDefault();send({action:'menu'});});
+root.addEventListener('contextmenu',e=>{if(e.target===nameInput)return;e.preventDefault();send({action:'menu'});});
 })();
 </script></body></html>

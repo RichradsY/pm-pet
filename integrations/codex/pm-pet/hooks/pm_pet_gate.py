@@ -74,6 +74,29 @@ def literal_argv(command):
     return shlex.split(command, comments=False, posix=True)
 
 
+def valid_feedback_review(pet, question, review):
+    """Validate control metadata only; the bridge owns answer/release semantics."""
+    feedback = pet.get("feedback")
+    if (not isinstance(review, dict)
+            or set(review) != {"questionId", "sourceUserMessageId", "answeredItemIndexes"}
+            or not isinstance(feedback, dict) or feedback.get("status") != "pending_review"
+            or feedback.get("questionId") != question["id"] or review["questionId"] != question["id"]
+            or not isinstance(review["sourceUserMessageId"], str) or not 1 <= len(review["sourceUserMessageId"]) <= 200
+            or review["sourceUserMessageId"] != feedback.get("sourceUserMessageId")):
+        return False
+    indexes = review["answeredItemIndexes"]
+    if (not isinstance(indexes, list) or len(indexes) > 32
+            or any(type(index) is not int for index in indexes) or len(set(indexes)) != len(indexes)):
+        return False
+    origin = question.get("origin")
+    if origin == "codex-input-tool":
+        items = question.get("items")
+        return isinstance(items, list) and all(0 <= index < min(32, len(items)) for index in indexes)
+    if origin == "codex-input-limit":
+        return not indexes  # Overflow still requires the bridge's separate full review.
+    return origin is None and not indexes  # Manual answers use exact resolve instead.
+
+
 def control_command(event, home, runtime, session_id, pet):
     name, values = event.get("tool_name"), event.get("tool_input")
     if not isinstance(values, dict):
@@ -136,6 +159,18 @@ def control_command(event, home, runtime, session_id, pet):
                 and report["sequence"] > pet.get("lastReportSequence", -1))
         if not current:
             return False
+        if "reviewFeedback" in report:
+            if not valid_feedback_review(pet, question, report["reviewFeedback"]):
+                return False
+            if "resolveQuestionId" not in report:
+                # Classifying an ordinary message must not advance the plan,
+                # cancel/replace a question, or smuggle another report action.
+                return set(report) == {"generation", "sequence", "reviewFeedback"}
+            if "cancelQuestionId" in report:
+                return False
+            # A combined answer reconciliation + resolution must also pass the
+            # existing exact-ID/full-roadmap checks below. The bridge verifies
+            # that every item is answered before committing either operation.
         classification = report.get("classifyQuestion")
         if (current and isinstance(classification, dict)
                 and classification == {"id": question["id"], "purpose": "setup", "optional": True}

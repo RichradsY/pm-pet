@@ -488,6 +488,76 @@ class BridgeTests(unittest.TestCase):
             MODULE.send_request(self.runtime, {"action": "enable", "id": str(uuid.uuid4())})
         self.assertEqual(list((self.runtime / "inbox").iterdir()), [])
 
+    def test_cancel_unread_rename_before_retry_prevents_uuid_sort_overwrite(self):
+        pet, _ = self.enable()
+        other, _ = self.enable()
+        old_id = "ffffffff-ffff-ffff-ffff-ffffffffffff"
+        retry_id = "00000000-0000-0000-0000-000000000001"
+        unrelated_id = "88888888-8888-8888-8888-888888888888"
+        inbox, ack = self.runtime / "inbox", self.runtime / "ack"
+        old_path = inbox / (old_id + ".json")
+        MODULE.atomic_json(old_path, {"requestId": old_id, "action": "preferences", "id": pet["id"], "title": "Old name"})
+        MODULE.atomic_json(inbox / (unrelated_id + ".json"), {"requestId": unrelated_id, "action": "preferences", "id": other["id"], "title": "Unrelated name"})
+        # Native's timeout recovery removes only its exact unread request before
+        # enabling retry. Without removal, UUID sorting would apply Old name last.
+        old_path.unlink(missing_ok=True)
+        MODULE.atomic_json(inbox / (retry_id + ".json"), {"requestId": retry_id, "action": "preferences", "id": pet["id"], "title": "New name"})
+        self.bridge.process_inbox()
+        self.assertEqual(pet["title"], "New name")
+        self.assertEqual(other["title"], "Unrelated name")
+        self.assertFalse((ack / (old_id + ".json")).exists())
+        self.assertTrue(MODULE.read_json(ack / (retry_id + ".json"))["ok"])
+        self.assertTrue(MODULE.read_json(ack / (unrelated_id + ".json"))["ok"])
+
+    def test_cancel_already_read_rename_then_retry_is_applied_after_inflight_old_name(self):
+        pet, _ = self.enable()
+        old_id = "ffffffff-ffff-ffff-ffff-ffffffffffff"
+        retry_id = "00000000-0000-0000-0000-000000000001"
+        inbox, ack = self.runtime / "inbox", self.runtime / "ack"
+        old_path = inbox / (old_id + ".json")
+        retry_path = inbox / (retry_id + ".json")
+        MODULE.atomic_json(old_path, {"requestId": old_id, "action": "preferences", "id": pet["id"], "title": "Old name"})
+        read_json = MODULE.read_json
+        def cancel_and_retry_after_read(path):
+            value = read_json(path)
+            if Path(path).resolve() == old_path.resolve():
+                # The serial bridge has captured Old name but has not handled it.
+                # Native cancels the path and immediately submits the retry.
+                old_path.unlink(missing_ok=True)
+                MODULE.atomic_json(retry_path, {"requestId": retry_id, "action": "preferences", "id": pet["id"], "title": "New name"})
+            return value
+        with mock.patch.object(MODULE, "read_json", side_effect=cancel_and_retry_after_read):
+            self.bridge.process_inbox()
+        self.assertEqual(pet["title"], "Old name")
+        self.assertTrue(retry_path.exists())
+        self.assertTrue(read_json(ack / (old_id + ".json"))["ok"])
+        self.bridge.process_inbox()
+        self.assertEqual(pet["title"], "New name")
+        self.assertTrue(read_json(ack / (retry_id + ".json"))["ok"])
+        self.assertFalse(old_path.exists())
+        self.assertFalse(retry_path.exists())
+
+    def test_cancel_missing_acked_rename_then_retry_ignores_old_request_replay(self):
+        pet, _ = self.enable()
+        old_id = "ffffffff-ffff-ffff-ffff-ffffffffffff"
+        retry_id = "00000000-0000-0000-0000-000000000001"
+        inbox, ack = self.runtime / "inbox", self.runtime / "ack"
+        old_path = inbox / (old_id + ".json")
+        old_request = {"requestId": old_id, "action": "preferences", "id": pet["id"], "title": "Old name"}
+        MODULE.atomic_json(old_path, old_request)
+        self.bridge.process_inbox()
+        self.assertFalse(old_path.exists())
+        self.assertTrue(MODULE.read_json(ack / (old_id + ".json"))["ok"])
+        # Missing is successful cancellation for retry purposes; it need not mean
+        # the previous edit was prevented. Its existing ack preserves idempotence.
+        old_path.unlink(missing_ok=True)
+        MODULE.atomic_json(inbox / (retry_id + ".json"), {"requestId": retry_id, "action": "preferences", "id": pet["id"], "title": "New name"})
+        MODULE.atomic_json(old_path, old_request)
+        self.bridge.process_inbox()
+        self.assertEqual(pet["title"], "New name")
+        self.assertFalse(old_path.exists())
+        self.assertTrue(MODULE.read_json(ack / (retry_id + ".json"))["ok"])
+
     def test_real_daemon_handshake(self):
         conversation_id, path = self.transcript()
         process = subprocess.Popen([sys.executable, str(SCRIPT), "serve", "--runtime", str(self.runtime), "--sessions-root", str(self.sessions)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)

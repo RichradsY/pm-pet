@@ -1,20 +1,25 @@
-"""Read Codex CLI quota without model calls, transcript scans, or credential reads.
+"""Read Codex CLI quota without model calls or transcript scans.
 
 This opens its own short-lived App Server and uses the CLI's existing auth context.
-It does not attach to Codex Desktop or prove that Desktop uses the same account.
+The diagnostic reader does not verify Desktop identity. The opt-in verified reader
+checks only a hash of managed file-auth account metadata against a Desktop binding.
 Call from one shared background worker; never call separately for every Pet.
 """
 
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
+import hmac
 import json
 import math
 import os
 from pathlib import Path
 import queue
+import re
 import shutil
 import signal
+import stat
 import subprocess
 import threading
 import time
@@ -22,6 +27,18 @@ from typing import Any
 
 
 SOURCE = "codex-cli-app-server"
+VERIFIED_SOURCE = "codex-cli-verified"
+MAX_AUTH_METADATA_BYTES = 256 * 1024
+ACCOUNT_FINGERPRINT_PREFIX = "pm-pet-account-v1:"
+# Leave all other process settings (including managed configuration and CA/proxy
+# settings) intact. File auth is the only credential source for this subprocess.
+ALTERNATE_AUTH_ENV = frozenset({
+    "OPENAI_API_KEY", "CODEX_API_KEY", "CODEX_ACCESS_TOKEN", "CODEX_AUTH_TOKEN",
+    "OPENAI_ACCESS_TOKEN", "OPENAI_BEARER_TOKEN", "CODEX_BEARER_TOKEN",
+    "CHATGPT_ACCESS_TOKEN", "CHATGPT_ACCOUNT_ID", "CODEX_AUTH_JSON",
+    "OPENAI_FEDERATION_RULE_ID", "OPENAI_IDENTITY_TOKEN_FILE",
+    "OPENAI_WORKLOAD_IDENTITY_CONTEXT",
+})
 
 
 class QuotaReadError(Exception):
@@ -34,6 +51,11 @@ class QuotaReadError(Exception):
 
 def _number(value: Any) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
+def _check_cancelled(cancel_event) -> None:
+    if cancel_event is not None and cancel_event.is_set():
+        raise QuotaReadError("cancelled")
 
 
 def _window(raw: Any) -> dict[str, Any] | None:
@@ -56,7 +78,7 @@ def _window(raw: Any) -> dict[str, Any] | None:
     }
 
 
-def normalize_rate_limits(result: Any) -> dict[str, Any]:
+def normalize_rate_limits(result: Any, *, strict: bool = False) -> dict[str, Any]:
     """Keep separate buckets and classify windows by duration, never slot name.
 
     Only the general ``codex`` bucket feeds the default Pet allowance. A
@@ -69,19 +91,42 @@ def normalize_rate_limits(result: Any) -> dict[str, Any]:
     if isinstance(mapped, dict):
         raw_buckets = mapped
     else:
+        if strict and mapped is not None:
+            raise QuotaReadError("invalid_response")
         legacy = result.get("rateLimits")
+        if strict and "rateLimits" in result and legacy is None:
+            return {"selectedLimitId": None, "windows": {}, "buckets": {}}
         if not isinstance(legacy, dict):
+            raise QuotaReadError("invalid_response")
+        if strict and legacy.get("limitId") is not None and not isinstance(legacy["limitId"], str):
             raise QuotaReadError("invalid_response")
         raw_buckets = {legacy.get("limitId") or "codex": legacy}
 
     buckets = {}
     for limit_id, raw in raw_buckets.items():
-        if not isinstance(limit_id, str) or not isinstance(raw, dict):
+        if not isinstance(limit_id, str) or not limit_id or not isinstance(raw, dict):
+            if strict:
+                raise QuotaReadError("invalid_response")
             continue
+        if strict:
+            declared_id = raw.get("limitId")
+            if (declared_id is not None and declared_id != limit_id) or not any(
+                slot in raw for slot in ("primary", "secondary")
+            ):
+                raise QuotaReadError("invalid_response")
         windows = {}
         other_windows = []
         for slot in ("primary", "secondary"):
-            value = _window(raw.get(slot))
+            raw_window = raw.get(slot)
+            value = _window(raw_window)
+            if strict and raw_window is not None:
+                reset = raw_window.get("resetsAt") if isinstance(raw_window, dict) else None
+                if value is None or not 0 <= value["usedPercent"] <= 100 or (
+                    reset is not None and (
+                        not _number(reset) or reset < 0 or int(reset) != reset
+                    )
+                ):
+                    raise QuotaReadError("invalid_response")
             if value is None:
                 continue
             key = {300: "five", 10080: "week"}.get(value["windowDurationMins"])
@@ -100,11 +145,13 @@ def normalize_rate_limits(result: Any) -> dict[str, Any]:
 
 
 class _ReadOnlyAppServer:
-    def __init__(self, binary: str, timeout: float):
+    def __init__(self, binary: str, timeout: float, *, extra_args=None, env=None, cancel_event=None):
+        _check_cancelled(cancel_event)
         self.deadline = time.monotonic() + timeout
+        self.cancel_event = cancel_event
         self.messages: queue.Queue[Any] = queue.Queue(maxsize=64)
         self.process = subprocess.Popen(
-            [binary, "app-server", "--stdio"],
+            [binary, *(extra_args or []), "app-server", "--stdio"],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
@@ -112,6 +159,7 @@ class _ReadOnlyAppServer:
             encoding="utf-8",
             bufsize=1,
             start_new_session=True,
+            env=env,
         )
         self.reader = threading.Thread(target=self._consume, daemon=True)
         self.reader.start()
@@ -147,15 +195,17 @@ class _ReadOnlyAppServer:
     def request(self, request_id: int, method: str, params: Any) -> dict[str, Any]:
         if method not in {"initialize", "account/read", "account/rateLimits/read"}:
             raise QuotaReadError("method_not_allowed")
+        _check_cancelled(self.cancel_event)
         self.send({"id": request_id, "method": method, "params": params})
         while True:
+            _check_cancelled(self.cancel_event)
             remaining = self.deadline - time.monotonic()
             if remaining <= 0:
                 raise QuotaReadError("timeout")
             try:
-                message = self.messages.get(timeout=remaining)
+                message = self.messages.get(timeout=min(remaining, 0.2))
             except queue.Empty:
-                raise QuotaReadError("timeout") from None
+                continue
             if message is None:
                 raise QuotaReadError("server_unavailable")
             if message.get("method") and "id" in message:
@@ -212,8 +262,8 @@ def read_codex_quota(codex_binary: str | None = None, timeout: float = 15) -> di
 
     Returns ``status='ok'`` with ``observedAt`` only after a successful API read.
     On failure, ``status='unavailable'`` and a safe ``errorCode`` are returned;
-    no fabricated zero/full quota or new success timestamp is emitted. Auth files
-    are never read by this module; Codex manages its own existing authentication.
+    no fabricated zero/full quota or new success timestamp is emitted. This entry
+    point never reads auth metadata; Codex manages its existing authentication.
     """
     base = {"source": SOURCE, "accountScope": "cli", "desktopAccountVerified": False}
     binary = codex_binary or shutil.which("codex")
@@ -250,6 +300,123 @@ def read_codex_quota(codex_binary: str | None = None, timeout: float = 15) -> di
     finally:
         if server is not None:
             server.close()
+
+
+def _account_metadata_snapshot(codex_home: Path) -> tuple:
+    """Return only a scoped hash and file generation, never the auth document.
+
+    No keychain fallback, token decoding, or auth refresh. A nonblocking regular
+    file read is bounded even if the configured path contains an unexpected FIFO.
+    The document is transiently decoded to access only auth_mode/account_id.
+    """
+    try:
+        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+        auth_path = codex_home / "auth.json"
+        descriptor = os.open(auth_path, flags)
+        def generation(info):
+            return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+        with os.fdopen(descriptor, "rb") as handle:
+            info = os.fstat(handle.fileno())
+            if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_AUTH_METADATA_BYTES:
+                raise QuotaReadError("auth_metadata_unavailable")
+            raw = handle.read(MAX_AUTH_METADATA_BYTES + 1)
+            if generation(os.fstat(handle.fileno())) != generation(info):
+                raise QuotaReadError("auth_changed")
+        # Detect replacement between open/read and the path check as well.
+        if generation(auth_path.lstat()) != generation(info):
+            raise QuotaReadError("auth_changed")
+        if len(raw) > MAX_AUTH_METADATA_BYTES:
+            raise QuotaReadError("auth_metadata_unavailable")
+        document = json.loads(raw)
+        del raw
+        if not isinstance(document, dict) or document.get("auth_mode") != "chatgpt":
+            raise QuotaReadError("auth_metadata_unavailable")
+        tokens = document.get("tokens")
+        account_id = tokens.get("account_id") if isinstance(tokens, dict) else None
+        if (not isinstance(account_id, str) or not 1 <= len(account_id) <= 512
+                or account_id.strip() != account_id
+                or any(ord(character) < 32 for character in account_id)):
+            raise QuotaReadError("auth_metadata_unavailable")
+        fingerprint = hashlib.sha256((ACCOUNT_FINGERPRINT_PREFIX + account_id).encode("utf-8")).hexdigest()
+        del account_id, tokens, document
+        return fingerprint, generation(info)
+    except (OSError, ValueError, UnicodeError, RecursionError):
+        raise QuotaReadError("auth_metadata_unavailable") from None
+
+
+def read_verified_codex_quota(expected_fingerprint: str, codex_binary: str | None = None,
+                              timeout: float = 15, codex_home=None, cancel_event=None) -> dict[str, Any]:
+    """Read quota only while file auth matches the caller's Desktop binding.
+
+    The caller must obtain the expected scoped SHA-256 from a trusted Desktop
+    accountId, not from this file. Both identity and file generation must match
+    before/after; even an ordinary token refresh discards this read. The caller
+    owns Desktop account-switch invalidation and freshness of its binding.
+    """
+    base = {"source": VERIFIED_SOURCE, "accountScope": "desktop-verified-cli",
+            "desktopAccountVerified": False}
+    server = None
+    try:
+        _check_cancelled(cancel_event)
+        if not isinstance(expected_fingerprint, str) or re.fullmatch(r"[0-9a-fA-F]{64}", expected_fingerprint) is None:
+            raise QuotaReadError("invalid_fingerprint")
+        expected_fingerprint = expected_fingerprint.lower()
+        if not _number(timeout) or timeout <= 0:
+            raise QuotaReadError("invalid_timeout")
+        configured_home = codex_home if codex_home is not None else os.environ.get("CODEX_HOME")
+        try:
+            if codex_home is not None and not codex_home:
+                raise ValueError()
+            home = Path(configured_home).expanduser().resolve(strict=True) if configured_home else (Path.home() / ".codex").resolve(strict=True)
+            if not home.is_dir():
+                raise ValueError()
+        except (OSError, TypeError, ValueError, RuntimeError):
+            raise QuotaReadError("auth_metadata_unavailable") from None
+        before_fingerprint, before_generation = _account_metadata_snapshot(home)
+        if not hmac.compare_digest(before_fingerprint, expected_fingerprint):
+            raise QuotaReadError("account_mismatch")
+        binary = codex_binary or shutil.which("codex")
+        if binary is None:
+            candidate = Path.home() / ".local" / "bin" / "codex"
+            binary = str(candidate) if candidate.is_file() else None
+        if binary is None:
+            raise QuotaReadError("codex_not_found")
+        environment = {key: value for key, value in os.environ.items() if key not in ALTERNATE_AUTH_ENV}
+        environment["CODEX_HOME"] = str(home)
+        server = _ReadOnlyAppServer(binary, min(timeout, 60),
+                                   extra_args=["-c", 'cli_auth_credentials_store="file"'],
+                                   env=environment, cancel_event=cancel_event)
+        server.request(1, "initialize", {"clientInfo": {"name": "pm_pet_quota", "version": "0.1.0"}})
+        server.send({"method": "initialized", "params": {}})
+        account = server.request(2, "account/read", {"refreshToken": False}).get("account")
+        if not isinstance(account, dict):
+            raise QuotaReadError("auth_required")
+        if account.get("type") != "chatgpt":
+            raise QuotaReadError("unsupported_account")
+        del account
+        normalized = normalize_rate_limits(server.request(3, "account/rateLimits/read", None), strict=True)
+        _check_cancelled(cancel_event)
+        after_fingerprint, after_generation = _account_metadata_snapshot(home)
+        if not hmac.compare_digest(after_fingerprint, expected_fingerprint):
+            raise QuotaReadError("account_changed")
+        if before_generation != after_generation:
+            raise QuotaReadError("auth_changed")
+        _check_cancelled(cancel_event)
+        return {**base, "status": "ok", "desktopAccountVerified": True,
+                "accountFingerprint": expected_fingerprint,
+                "observedAt": dt.datetime.now(dt.timezone.utc).isoformat(),
+                "selectedLimitId": normalized["selectedLimitId"], "windows": normalized["windows"]}
+    except QuotaReadError as error:
+        return {**base, "status": "unavailable", "errorCode": error.code}
+    except (OSError, ValueError, TypeError, subprocess.SubprocessError):
+        return {**base, "status": "unavailable", "errorCode": "server_unavailable"}
+    finally:
+        if server is not None:
+            try:
+                server.close()
+            except (OSError, ValueError, subprocess.SubprocessError):
+                # The scheduler must not accept a snapshot if owned cleanup failed.
+                return {**base, "status": "unavailable", "errorCode": "server_cleanup_failed"}
 
 
 def main() -> int:

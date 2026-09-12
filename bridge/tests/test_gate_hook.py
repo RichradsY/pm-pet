@@ -78,6 +78,18 @@ class GateHookTests(unittest.TestCase):
     def report_event(self, report=None):
         return self.command_event(self.argv("report", ["--json", json.dumps(self.report() if report is None else report)]))
 
+    def feedback_candidate(self, origin="codex-input-tool"):
+        self.pending()
+        if origin:
+            self.pet["question"]["origin"] = origin
+        if origin == "codex-input-tool":
+            self.pet["question"]["items"] = [{"index": 0, "answered": False}, {"index": 1, "answered": False}]
+        self.pet["feedback"] = {"questionId": "q-one", "sourceUserMessageId": "candidate-message",
+                                "observedAt": "2026-01-01T00:00:02Z", "status": "pending_review"}
+        self.save()
+        return {"generation": 3, "sequence": 10,
+                "reviewFeedback": {"questionId": "q-one", "sourceUserMessageId": "candidate-message", "answeredItemIndexes": [0]}}
+
     def test_fresh_enabled_without_pending_defers_to_normal_policy(self):
         self.assertEqual(self.evaluate(), {})
 
@@ -215,6 +227,96 @@ class GateHookTests(unittest.TestCase):
         self.deny(self.report_event(dict(report, phase='building')))
         self.deny(self.report_event(dict(report, steps=[])))
         self.deny(self.report_event(dict(report, classifyQuestion={'id': 'wrong', 'purpose': 'setup', 'optional': True})))
+
+    def test_feedback_review_only_accepts_matching_candidate_without_releasing(self):
+        report = self.feedback_candidate()
+        before = (self.runtime / "state.json").read_bytes()
+        self.assertEqual(self.evaluate(self.report_event(report)), {})
+        report["reviewFeedback"]["answeredItemIndexes"] = []
+        self.assertEqual(self.evaluate(self.report_event(report)), {})
+        self.assertEqual((self.runtime / "state.json").read_bytes(), before)
+        self.deny()
+
+    def test_feedback_review_requires_current_generation_sequence_and_candidate(self):
+        report = self.feedback_candidate()
+        for key, value in (("generation", 2), ("generation", True), ("sequence", 9), ("sequence", True)):
+            with self.subTest(key=key, value=value):
+                self.deny(self.report_event(dict(report, **{key: value})))
+        for key, value in (("questionId", "another-question"), ("sourceUserMessageId", "older-message"),
+                           ("sourceUserMessageId", ""), ("sourceUserMessageId", None)):
+            with self.subTest(key=key, value=value):
+                review = dict(report["reviewFeedback"], **{key: value})
+                self.deny(self.report_event(dict(report, reviewFeedback=review)))
+
+    def test_feedback_review_rejects_absent_reviewed_or_replaced_candidate(self):
+        report = self.feedback_candidate()
+        original = dict(self.pet["feedback"])
+        for feedback in (None, {}, dict(original, status="reviewed"), dict(original, questionId="old-question"),
+                         dict(original, sourceUserMessageId="newer-message")):
+            with self.subTest(feedback=feedback):
+                self.pet["feedback"] = feedback
+                self.save()
+                self.deny(self.report_event(report))
+
+    def test_feedback_review_rejects_extra_missing_or_invalid_metadata(self):
+        report = self.feedback_candidate()
+        original = report["reviewFeedback"]
+        for review in (None, [], {}, dict(original, answer="Do not store answer text"),
+                       {key: value for key, value in original.items() if key != "answeredItemIndexes"}):
+            self.deny(self.report_event(dict(report, reviewFeedback=review)))
+        for indexes in (None, "0", [True], [0.0], [-1], [2], [0, 0], [[0]], list(range(33))):
+            with self.subTest(indexes=indexes):
+                self.deny(self.report_event(dict(report, reviewFeedback=dict(original, answeredItemIndexes=indexes))))
+
+    def test_feedback_review_only_rejects_mixed_progress_and_actions(self):
+        report = self.feedback_candidate()
+        for key, value in (("phase", "idle"), ("phase", "building"), ("steps", []), ("currentStep", "Build"),
+                           ("currentStepId", "build"), ("planRevision", 1), ("question", {"id": "new"}),
+                           ("cancelQuestionId", "q-one"), ("sourceUserMessageId", "candidate-message"),
+                           ("classifyQuestion", {"id": "q-one", "purpose": "setup", "optional": True}),
+                           ("command", "touch BAD")):
+            with self.subTest(key=key, value=value):
+                self.deny(self.report_event(dict(report, **{key: value})))
+
+    def test_feedback_review_can_accompany_exact_full_resolution(self):
+        candidate = self.feedback_candidate()
+        report = dict(self.report(), reviewFeedback=dict(candidate["reviewFeedback"], answeredItemIndexes=[0, 1]))
+        self.assertEqual(self.evaluate(self.report_event(report)), {})
+        for key, value in (("resolveQuestionId", "other-question"), ("steps", None), ("currentStep", "")):
+            with self.subTest(key=key):
+                self.deny(self.report_event(dict(report, **{key: value})))
+        self.deny(self.report_event(dict(report, cancelQuestionId="q-one")))
+
+    def test_feedback_review_manual_and_overflow_index_rules(self):
+        for origin, allowed in ((None, ([],)), ("codex-input-limit", ([],))):
+            report = self.feedback_candidate(origin=origin)
+            for indexes in ([], [0], [1]):
+                with self.subTest(origin=origin, indexes=indexes):
+                    event = self.report_event(dict(report, reviewFeedback=dict(report["reviewFeedback"], answeredItemIndexes=indexes)))
+                    if indexes in allowed:
+                        self.assertEqual(self.evaluate(event), {})
+                    else:
+                        self.deny(event)
+
+    def test_feedback_review_bounds_metadata_even_if_state_is_oversized(self):
+        report = self.feedback_candidate()
+        self.pet["question"]["items"] = [{"index": index, "answered": False} for index in range(33)]
+        self.save()
+        review = dict(report["reviewFeedback"], answeredItemIndexes=[31])
+        self.assertEqual(self.evaluate(self.report_event(dict(report, reviewFeedback=review))), {})
+        self.deny(self.report_event(dict(report, reviewFeedback=dict(review, answeredItemIndexes=[32]))))
+        self.pet["feedback"]["sourceUserMessageId"] = "m" * 201
+        self.save()
+        self.deny(self.report_event(dict(report, reviewFeedback=dict(review, sourceUserMessageId="m" * 201))))
+
+    def test_feedback_review_accepts_file_transport_with_same_checks(self):
+        report = self.feedback_candidate()
+        path = self.home / "feedback-review.json"
+        path.write_text(json.dumps(report))
+        event = self.command_event(self.argv("report", ["--file", str(path)]))
+        self.assertEqual(self.evaluate(event), {})
+        path.write_text(json.dumps(dict(report, phase="building")))
+        self.deny(event)
 
     def test_report_file_path_must_be_absolute_and_existing(self):
         self.pending("awaiting_review")

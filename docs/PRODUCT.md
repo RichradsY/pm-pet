@@ -2,7 +2,7 @@
 
 ## Current status
 - A native macOS developer app now connects to explicitly enabled local Codex conversations through a source-checkout helper.
-- It displays reported roadmaps/questions, observes root and child activity, and shares cached general Codex quota with its source timestamp. It does not enforce agent pause/resume or automatically fetch live Desktop quota.
+- It displays reported roadmaps/questions, observes root and child activity, and shares general Codex quota with its actual source timestamp. Conditional automatic reads use a CLI account matched to the last genuine Desktop account check. It does not enforce agent pause/resume.
 - A source installer provides a user command and optional Codex skill. A signed, notarized downloadable app remains future work.
 - Version `0.1.0-alpha.1` is a source preview. The separate HTML prototypes use simulated data; the historical `0.1.0-prototype.1` tag is unchanged.
 
@@ -62,14 +62,16 @@
 - Display only quota windows actually supplied by the account, including weekly-only accounts.
 - Missing data is unavailable, never an inferred zero balance.
 - Hidden quota displays have an independent recovery control that restores only available windows.
-- Quota values in the browser prototype are examples. Native values come from recorded general Codex snapshots in bound conversations, with model-specific buckets excluded.
+- Quota values in the browser prototype are examples. Native values come from genuine Desktop checks, recorded general Codex snapshots, or verified direct CLI reads; model-specific buckets are excluded.
 - Account quota is shared by all Pets using the same validated authentication context; it is not per-conversation consumption.
 - Only the first-ever newly enabled Pet shows quota by default. Additional new Pets start with quota hidden; each Pet can turn its own display on or off.
 - Quota visibility preferences persist across disable/re-enable. Hiding or disabling the first Pet never moves quota to another automatically; all displays may remain hidden.
 - Quota can be restored from any Pet's settings or its menu entry, including when every display is hidden.
-- Proposed refresh defaults: live events promptly, one shared read every 60 seconds during running work, and every 5 minutes while idle. Hide-all stops active quota polling.
-- These refresh intervals are future scheduler behavior. An optional direct CLI-account probe works, but its account is not verified against Desktop and it is not an automatic Pet data source.
-- Progress and input reminders use their own event path and do not wait for quota polling. Cache repainting does not advance the last-successful-update timestamp.
+- After enabling, check usage once in Codex Desktop to seed the account match. Automatic updates require an installed Codex CLI with ChatGPT file authentication; Pet's other features do not require it. Keychain-only or unmatched credentials cannot enable automatic reads.
+- The reader checks the local account hash against the last genuine Desktop check and requires unchanged auth-file generation before and after each read. This is not a permanent binding to the current Desktop login. No raw account IDs, tokens, or credit balances are retained in Pet state.
+- One shared worker schedules the next direct account read 60 seconds after success during confirmed running work without a pending question, or 300 seconds while idle or awaiting a reply. Refreshes do not send model prompts. Hiding all quota displays or disabling all Pets cancels polling and any in-flight read.
+- Transport failures back off while preserving the cached value's actual age; account mismatch makes quota unavailable. Show Auto, Checking, Retry, or Account check needed without adding a refresh button. There is no OS-wake hook.
+- Progress and input reminders use their own event path and do not wait for quota polling. A successful read may return the same percentage with a new actual timestamp; cache repainting never advances it. The standalone CLI `--probe` remains an unverified diagnostic, not an account-match substitute.
 
 ## Lifecycle and ownership
 - Hide: collapse the panel while retaining the pet, tracking, and any pending reminder.

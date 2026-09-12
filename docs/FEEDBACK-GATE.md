@@ -2,17 +2,21 @@
 
 PM Pet's co-build policy is to wait for the user's answer at consequential product, UX, scope, cost, or time decisions and known required-information prompts. The same build's child tasks wait too; unrelated conversations are unaffected.
 
+## What the user sees
+
+Codex can end its asking turn while a decision is still pending. Once that end event is observed, the panel says **Turn ended** and explains that replying in Codex continues the conversation. The question remains open. A new message replaces the ended-turn state; message receipt and answer review remain separate from delivery progress. Without an observed end event, Pet does not guess that a turn ended from a pending question or silence. **Open Codex to reply** only navigates to the owning conversation. Submit the answer on the original question card or send it in that conversation. Ordinary chat feedback shows **Message received / Awaiting review** until the owning agent identifies which items it answers. Multi-item questions show reply counts and move to the next unanswered item; the next item can reopen a hidden panel once.
+
 ## What releases the wait
 
 The Desktop adapter recognizes the locally observed `request_user_input_async` call format. It keeps the call ID, question-item IDs, question text, and answer-arrival metadata. It does not copy answers into Pet state. The tool's `{accepted: true}` response only acknowledges delivery.
 
-Only a corresponding root `UserMessage` with matching question-call and item IDs marks the observed items answered. A normal user message, tool output, turn completion, app restart, elapsed time, or reminder dismissal never does. The local reply envelope is not a cryptographic attestation: it is correlation evidence for the main agent to review, not independent proof of an approved action.
+A corresponding root `UserMessage` with matching question-call and item IDs automatically marks the observed items answered. A normal user message records a pending feedback candidate, without marking an item answered. The owning agent can explicitly associate that actual message with item indices through `reviewFeedback`; this stores provenance, not the answer text. A tool output, turn completion, app restart, elapsed time, or reminder dismissal never answers a question. The local reply envelope is not a cryptographic attestation: it is correlation evidence for the main agent to review, not independent proof of an approved action.
 
 An explicit request to cancel or defer is a separate outcome. The owning agent can cite the actual latest user-message ID and cancel the exact question with a revised full roadmap. This is not an answer or an approval. It is also the recovery path when the user explicitly asks to fix a stuck waiting mechanism; the agent must not insist that the broken question card be answered first.
 
-After every item in the current question is answered, Pet displays **Reviewing reply**. The wait remains until the owning agent reviews the actual answers in Codex and submits the matching resolution ID with the complete reviewed roadmap and current step. Other queued questions can still keep the gate closed. The agent resumes work only after reviewing the returned state.
+After every item in the current question is answered, Pet displays **Reply received / Awaiting review**. The wait remains until the owning agent reviews the actual answers in Codex and submits the matching resolution ID with the complete reviewed roadmap and current step. Other queued questions can still keep the gate closed. The agent resumes work only after reviewing the returned state.
 
-The adapter supports the observed Desktop format, not all possible Codex question tools. Plain-text questions and system/terminal prompts still need an explicit report and main-agent verification. Passwords stay in the original input window.
+The adapter supports the observed Desktop format, not all possible Codex question tools. Chat answers to observed questions require explicit main-agent verification through the [report contract](../integrations/codex/pm-pet/references/report-contract.md#ordinary-chat-feedback). Plain-text questions and system/terminal prompts still need an explicit report and main-agent verification. Passwords stay in the original input window.
 
 ## Stopping work is separate from displaying a question
 
@@ -55,14 +59,19 @@ These permission reminders must remain separate from roadmap decisions. Deferrin
 
 New automatically observed question calls are admitted under a 2 MiB serialized registry budget, leaving room below the native 4 MiB reader limit. Excess calls create an explicit reconciliation reminder without discarding already queued questions; bounded overflow identities prevent replay. This prevents newly admitted question bodies from exhausting the reader, but does not migrate an already oversized legacy state file.
 
+## Feedback delivery timing
+
+Already bound transcripts are read on the normal local observer tick. While a question is pending, new source shards are rediscovered every two seconds; the normal discovery interval remains thirty seconds. This is local transcript observation, not model or quota polling, and depends on Codex writing the underlying event.
+
+Exact reply envelopes are accepted in first-class user text blocks even when the message also contains other blocks. If a reply arrives before its question is discovered, a bounded metadata cache retains the call/item identity, question digest, source-message identity, and time for later correlation. No answer content is retained. New question admission reserves space for future answer provenance; oversized legacy state still requires separate recovery.
+
 ## Validation status
 
 Validated locally on 2026-09-12:
 
-- 67 bridge/question tests and 33 hook tests pass. Coverage includes multi-item queues, explicit cancellation with root-message provenance, optional setup classification, binding isolation, failure atomicity, shared serialized payload budget, restart, replay, late replies, full-roadmap review, literal control commands, and fail-closed state errors.
-- 45 native-state tests pass. The actual native HTML browser preview keeps Optional setup, Open Codex, and Not now above a long roadmap; a failed deferral restores the button and reports the failure. Stale responses and timeouts cannot clear a different question. A native acknowledgment timeout is shown as unconfirmed, distinct from a definite rejection, and later authoritative state remains decisive.
-- The native Swift developer build passes, including an independently compiled version of the recovery change.
-- In the real owning conversation, the obsolete hook-setup question was cancelled as `setup_deferred` with zero answered items, based on the user's explicit recovery request. The Pet returned to Building and its reading animation with the revised roadmap. The deferred hook activation was removed from the active scope, not marked completed.
-- The machine-specific hook configuration remains ignored by Git. Its trust and live execution coverage remain unverified; optional activation is deferred.
+- 161 Python tests and 64 JavaScript tests pass. Coverage includes ordinary feedback candidates, explicit item reconciliation, partial and unrelated replies, atomic failure, cross-thread and stale-source rejection, restart and replay, multi-block replies, and out-of-order call/reply delivery.
+- The real bridge produced six synthetic snapshots for the native HTML preview: waiting, message received, a partial verified answer, an unrelated message reviewed, all answers received, and full-roadmap resolution. The UI distinguishes message arrival from a verified answer, keeps the next question visible, uses calm review animation, and resumes progress only with a reviewed report. Long-question/roadmap layout and light/dark appearances were checked.
+- The native Swift developer build and source skill validation pass. The next unanswered item has its own reminder identity; ordinary polling or candidate feedback does not repeatedly reopen the panel.
+- The optional hook remains untrusted/unverified on this machine. Its scoped feedback-control compatibility is tested offline; neither this hook nor Pet state proves that every running tool is suspended.
 
-The real correlated answer/review flow and trusted-hook execution test still need separate live validation. Global installation, consumer distribution, hard runtime suspension, and coverage of all Codex versions are not implied by this integration.
+A real ordinary-chat round trip was also verified in the owning conversation: the message created a pending-review candidate, explicit main-agent reconciliation displayed Reply received, and full-roadmap resolution removed the question and changed the native progress display from 2/3 to 3/3. The user did not need to resubmit the answer on the question card. This source preview does not imply global installation, consumer distribution, hard runtime suspension, or coverage of every Codex version.

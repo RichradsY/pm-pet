@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Local, explicit PM Pet control and a conservative Codex transcript observer.
 
-Python 3.9+, standard library only. No credentials, network calls, or Codex settings.
+Python 3.9+, standard library only. Verified quota reads use a short-lived
+read-only Codex App Server; no global Codex settings are changed.
 Transcript events are observations; this process never pauses or resumes agents.
 OS/terminal input prompts have no verified pending event in this adapter. Typed
 explicit reminders point back to their original surface; no input values are collected.
@@ -22,6 +23,11 @@ import sys
 import time
 import uuid
 
+# The bridge is both a script and a dynamically loaded test module.
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+from quota_scheduler import QuotaScheduler
+
 
 THEMES = ("sage", "sky", "lilac", "rose", "sand")
 MAX_PETS = 5
@@ -30,6 +36,9 @@ MAX_LINE_BYTES = 16 * 1024 * 1024
 MAX_PENDING_INPUT_CALLS = 32
 MAX_INPUT_ITEMS = 32
 MAX_INPUT_TOMBSTONES = 256
+MAX_FEEDBACK_MESSAGES = 32
+MAX_DEFERRED_INPUT_REPLIES = 128
+MAX_PENDING_TURN_ENDS = 16
 # Native state/ack readers accept 4 MiB. New question admission uses half of that
 # across the entire registry, leaving room for roadmaps, outcomes, and envelopes.
 MAX_QUESTION_STATE_BYTES = 2 * 1024 * 1024
@@ -203,12 +212,91 @@ def quota_snapshot(limits, observed_at):
             windows[name] = {"remainingPercent": max(0, min(100, 100 - used)),
                              "windowDurationMins": minutes}
             resets = window.get("resets_at", window.get("resetsAt"))
-            if isinstance(resets, (int, float)) and not isinstance(resets, bool):
+            if isinstance(resets, (int, float)) and not isinstance(resets, bool) and math.isfinite(resets) and resets >= 0:
                 windows[name]["resetsAt"] = resets
     if not windows:
         return None
     return {"windows": windows, "observedAt": observed_at, "source": "transcript",
             "limitId": limit_id}
+
+
+def desktop_quota_snapshot(item, observed_at):
+    """Accept only a completed, first-class Desktop account-read result.
+
+    The caller establishes exact root ownership. Do not parse shell output,
+    arbitrary tool prose, or an exec wrapper looking for quota-shaped JSON.
+    None means failure/invalid; an empty windows mapping is known-unavailable.
+    Only normalized usage is retained, never the account ID or credit balance.
+    """
+    if (not observed_at or not isinstance(item, dict)
+            or item.get("type") != "McpToolCall" or item.get("server") != "codex_app"
+            or item.get("tool") != "get_usage_limits" or item.get("status") != "completed"):
+        return None
+    result = item.get("result")
+    if not isinstance(result, dict) or result.get("isError") not in (None, False):
+        return None
+    data = result.get("structuredContent")
+    if data is None:
+        content = result.get("content")
+        if not isinstance(content, list):
+            return None
+        candidates = []
+        for block in content:
+            if not isinstance(block, dict) or block.get("type") != "text":
+                continue
+            text = block.get("text")
+            if not isinstance(text, str) or len(text) > MAX_REQUEST_BYTES:
+                continue
+            try:
+                parsed = json.loads(text)
+            except ValueError:
+                continue
+            if isinstance(parsed, dict) and ("rateLimitsByLimitId" in parsed or "rateLimits" in parsed):
+                candidates.append(parsed)
+        if len(candidates) != 1:
+            return None
+        data = candidates[0]
+    if not isinstance(data, dict) or not any(key in data for key in ("rateLimitsByLimitId", "rateLimits")):
+        return None
+    mapped = data.get("rateLimitsByLimitId")
+    if mapped is not None:
+        if not isinstance(mapped, dict):
+            return None
+        limits = mapped.get("codex")
+        if "codex" in mapped and not isinstance(limits, dict):
+            return None
+    else:
+        if "rateLimits" not in data:
+            return None
+        limits = data["rateLimits"]
+        if limits is not None and not isinstance(limits, dict):
+            return None
+        if limits and limits.get("limitId") not in (None, "codex"):
+            limits = None
+    snapshot = {"windows": {}, "observedAt": observed_at,
+                "source": "codex-desktop-account", "limitId": "codex"}
+    account_id = data.get("accountId")
+    if isinstance(account_id, str) and account_id and account_id == account_id.strip() and len(account_id) <= 512 and all(ord(char) >= 32 for char in account_id):
+        snapshot["accountFingerprint"] = hashlib.sha256(("pm-pet-account-v1:" + account_id).encode()).hexdigest()
+    if limits is None:
+        return snapshot
+    if limits.get("limitId") not in (None, "codex") or not any(key in limits for key in ("primary", "secondary")):
+        return None
+    for slot in ("primary", "secondary"):
+        window = limits.get(slot)
+        if window is None:
+            continue
+        if not isinstance(window, dict):
+            return None
+        minutes, used = window.get("windowDurationMins"), window.get("usedPercent")
+        if (isinstance(minutes, bool) or not isinstance(minutes, (int, float))
+                or not math.isfinite(minutes) or minutes <= 0 or int(minutes) != minutes
+                or isinstance(used, bool) or not isinstance(used, (int, float)) or not math.isfinite(used)):
+            return None
+    normalized = quota_snapshot(limits, observed_at)
+    if normalized:
+        snapshot["windows"] = normalized["windows"]
+    return snapshot
 
 
 class Bridge:
@@ -225,6 +313,11 @@ class Bridge:
             pet.setdefault("inputCallHistory", {})
             pet.setdefault("pendingQuestions", [])
             pet.setdefault("questionWatchStartedAt", now_iso())
+            pet.setdefault("feedback", None)
+            pet.setdefault("feedbackMessages", [])
+            pet.setdefault("deferredInputReplies", [])
+            pet.setdefault("turnState", None)
+            pet.setdefault("pendingTurnEnds", [])
         self.bindings = read_json(self.bindings_path) if self.bindings_path.exists() else {}
         self.tails = {}
         self.last_discovery = {}
@@ -240,6 +333,60 @@ class Bridge:
         if self.changed:
             self.state["revision"] += 1
             self.persist()
+
+    def observe_quota(self, pet, snapshot):
+        if snapshot is None:
+            return
+        account_changed = False
+        if snapshot["source"] == "codex-desktop-account":
+            invalidated = timestamp(self.state["quota"].get("invalidatedDesktopThrough"))
+            if invalidated and snapshot["observedAt"] <= invalidated:
+                return
+            # Account evidence orders only against other Desktop evidence. A
+            # later CLI completion must not swallow a delayed account switch.
+            binding = self.state.get("quotaBinding") or {}
+            if not timestamp(binding.get("observedAt")) or snapshot["observedAt"] > timestamp(binding["observedAt"]):
+                fingerprint = snapshot.get("accountFingerprint")
+                account_changed = fingerprint != binding.get("fingerprint")
+                self.state["quotaBinding"] = {"fingerprint": fingerprint, "observedAt": snapshot["observedAt"],
+                                              "sourceConversationId": pet["id"]}
+                self.changed = True
+            elif snapshot.get("accountFingerprint") != binding.get("fingerprint"):
+                return
+        elif snapshot["source"] == "transcript" and (self.state.get("quotaBinding") or {}).get("fingerprint"):
+            # Unidentified token events cannot replace a matched account read.
+            return
+        previous = timestamp(self.state["quota"].get("observedAt"))
+        if account_changed or not previous or snapshot["observedAt"] > previous:
+            snapshot["sourceConversationId"] = pet["id"]
+            if "refresh" in self.state["quota"]:
+                snapshot["refresh"] = self.state["quota"]["refresh"]
+            self.state["quota"] = snapshot
+            self.changed = True
+
+    def poll_quota(self, scheduler):
+        result, metadata = scheduler.tick(self.state["pets"], self.state.get("quotaBinding"))
+        binding = self.state.get("quotaBinding") or {}
+        if result and result.get("status") == "ok" and result.get("accountFingerprint") == binding.get("fingerprint"):
+            observed = timestamp(result.get("observedAt"))
+            previous = timestamp(self.state["quota"].get("observedAt"))
+            if observed and (not previous or observed > previous):
+                self.state["quota"] = {"windows": result.get("windows", {}), "observedAt": observed,
+                    "source": "codex-cli-verified", "limitId": result.get("selectedLimitId"),
+                    "accountFingerprint": binding["fingerprint"], "desktopVerifiedAt": binding["observedAt"]}
+                self.changed = True
+        elif result and result.get("errorCode") in ("account_mismatch", "account_changed", "auth_metadata_unavailable", "auth_required", "unsupported_account"):
+            # Preserve the Desktop event watermark across restart/replay even
+            # when the visible snapshot has been cleared after an auth failure.
+            invalidated = max(filter(None, (timestamp(binding.get("observedAt")),
+                timestamp(self.state["quota"].get("invalidatedDesktopThrough")))), default=None)
+            self.state["quota"] = {"windows": {}, "observedAt": None, "source": "unavailable",
+                                   "invalidatedDesktopThrough": invalidated}
+            self.changed = True
+        if self.state["quota"].get("refresh") != metadata:
+            self.state["quota"]["refresh"] = metadata
+            self.changed = True
+        self.publish()
 
     def pet(self, conversation_id):
         return next((pet for pet in self.state["pets"] if pet["id"] == conversation_id), None)
@@ -271,11 +418,13 @@ class Bridge:
                    "currentStepId": None,
                    "steps": [], "question": None, "sourceUpdatedAt": None, "sourceStatus": "connecting",
                    "children": [], "generation": 0, "lastReportSequence": -1, "planVersion": 0,
-                   "roadmapNeedsUpdate": False, "requestObservedAt": None, "planReviewedAt": None}
+                   "roadmapNeedsUpdate": False, "requestObservedAt": None, "planReviewedAt": None,
+                   "turnState": None}
             self.state["pets"].append(pet)
         pet["enabled"] = True
         pet["sourceStatus"] = "connecting"
         pet["generation"] += 1
+        pet["feedback"] = None
         pet["questionWatchStartedAt"] = now_iso()
         pet.setdefault("inputCallHistory", {})
         pet.setdefault("pendingQuestions", [])
@@ -330,6 +479,81 @@ class Bridge:
         for call in tombstones[:-MAX_INPUT_TOMBSTONES]:
             pet["questionHistoryPrunedBefore"] = max(pet.get("questionHistoryPrunedBefore") or "", call["observedAt"])
             del history[call["callId"]]
+        self.refresh_feedback(pet)
+
+    @staticmethod
+    def refresh_feedback(pet):
+        current = pet.get("question")
+        observed = (current.get("observedAt") or pet.get("questionObservedAt")) if current else None
+        # Terminal automatic calls already have tombstone/watermark replay protection.
+        # Keep message review references only for currently pending questions, so the
+        # per-message list cannot accumulate an unbounded history of reviewed calls.
+        active_ids = {"input:" + call["callId"] for call in pet.get("inputCallHistory", {}).values()
+                      if call["status"] not in TERMINAL_INPUT_STATUSES}
+        if current:
+            active_ids.add(current["id"])
+        if pet.get("questionOverflow"):
+            active_ids.add(pet["questionOverflow"]["id"])
+        for entry in pet.get("feedbackMessages", []):
+            entry["reviewedQuestionIds"] = [question_id for question_id in entry.get("reviewedQuestionIds", []) if question_id in active_ids]
+        candidates = [entry for entry in pet.get("feedbackMessages", [])
+                      if current and observed and entry["observedAt"] > observed
+                      and entry.get("generation") == pet["generation"]
+                      and current["id"] not in entry.get("reviewedQuestionIds", [])]
+        latest = max(candidates, key=lambda entry: (entry["observedAt"], entry["sourceUserMessageId"])) if candidates else None
+        pet["feedback"] = {"questionId": current["id"], "sourceUserMessageId": latest["sourceUserMessageId"],
+                           "observedAt": latest["observedAt"], "status": "pending_review"} if latest else None
+
+    def observe_feedback_message(self, pet, item, observed):
+        """A root user message is a review candidate, never an inferred answer."""
+        message_id = item.get("id")
+        if not observed or observed < (pet.get("questionWatchStartedAt") or "") or not isinstance(message_id, str) or not 1 <= len(message_id) <= 200:
+            return
+        messages = pet.setdefault("feedbackMessages", [])
+        if any(entry["sourceUserMessageId"] == message_id for entry in messages):
+            return
+        floor = pet.get("feedbackPrunedBefore") or ""
+        if observed <= floor:
+            return
+        messages.append({"sourceUserMessageId": message_id, "observedAt": observed,
+                         "generation": pet["generation"], "reviewedQuestionIds": []})
+        messages.sort(key=lambda entry: (entry["observedAt"], entry["sourceUserMessageId"]))
+        if len(messages) > MAX_FEEDBACK_MESSAGES:
+            pet["feedbackPrunedBefore"] = max(floor, messages[-MAX_FEEDBACK_MESSAGES - 1]["observedAt"])
+            del messages[:-MAX_FEEDBACK_MESSAGES]
+        self.refresh_feedback(pet)
+        self.changed = True
+
+    def review_feedback(self, pet, review):
+        if not isinstance(review, dict) or set(review) != {"questionId", "sourceUserMessageId", "answeredItemIndexes"}:
+            raise BridgeError("reviewFeedback requires questionId, sourceUserMessageId, and answeredItemIndexes only.")
+        current, feedback = pet.get("question"), pet.get("feedback")
+        if not current or not feedback or review["questionId"] != current["id"] or feedback["questionId"] != current["id"] or review["sourceUserMessageId"] != feedback["sourceUserMessageId"]:
+            raise BridgeError("Feedback review must match the current question and latest observed feedback message.")
+        message = next((entry for entry in pet.get("feedbackMessages", []) if entry["sourceUserMessageId"] == review["sourceUserMessageId"]), None)
+        question_at = current.get("observedAt") or pet.get("questionObservedAt")
+        if not message or message.get("generation") != pet["generation"] or not question_at or message["observedAt"] <= question_at or current["id"] in message["reviewedQuestionIds"]:
+            raise BridgeError("Feedback source must be an unreviewed root message after this question in the current binding generation.")
+        indexes = review["answeredItemIndexes"]
+        if not isinstance(indexes, list) or len(indexes) > MAX_INPUT_ITEMS or any(isinstance(index, bool) or not isinstance(index, int) for index in indexes) or len(set(indexes)) != len(indexes):
+            raise BridgeError("answeredItemIndexes must be a bounded list of unique integer item indexes.")
+        call = pet.get("inputCallHistory", {}).get(current.get("callId")) if current.get("origin") == "codex-input-tool" else None
+        if indexes and (not call or any(not 0 <= index < len(call["items"]) for index in indexes)):
+            raise BridgeError("Answered item indexes must reference the current observed question call.")
+        for index in indexes:
+            item = call["items"][index]
+            if item["answered"]:
+                continue  # Keep the original evidence; review never replaces a card reply's provenance.
+            item.update({"answered": True, "answeredAt": message["observedAt"],
+                         "answerSource": "main-agent-review", "sourceUserMessageId": message["sourceUserMessageId"], "reviewedAt": now_iso()})
+        if call:
+            call["status"] = "awaiting_review" if all(item["answered"] for item in call["items"]) else "awaiting_reply"
+        # A review of the newest message also retires older candidate notifications for
+        # this question. Older messages must not pop back into the UI after dismissal.
+        for entry in pet.get("feedbackMessages", []):
+            if entry["observedAt"] <= message["observedAt"] and current["id"] not in entry["reviewedQuestionIds"]:
+                entry["reviewedQuestionIds"].append(current["id"])
+        self.refresh_input_queue(pet)
 
     def input_overflow(self, pet, reason, call_id=None, observed=None):
         pet["questionOverflow"] = {"id": "input-queue-overflow", "text": "Review all pending questions in Codex; this question group exceeds the local display limit.",
@@ -348,8 +572,20 @@ class Bridge:
         self.changed = True
 
     def question_candidate_fits(self, pet, candidate):
-        projected = dict(self.state)
-        projected["pets"] = [candidate if item["id"] == pet["id"] else item for item in self.state["pets"]]
+        projected = copy.deepcopy(self.state)
+        projected["pets"] = [copy.deepcopy(candidate) if item["id"] == pet["id"] else item for item in projected["pets"]]
+        # Reserve the largest supported future answer provenance before admitting
+        # prompt bodies. Answer arrival must not unexpectedly double a full queue.
+        for projected_pet in projected["pets"]:
+            for call in projected_pet.get("inputCallHistory", {}).values():
+                if call["status"] in TERMINAL_INPUT_STATUSES:
+                    continue
+                for item in call["items"]:
+                    if item["answered"]:
+                        continue
+                    item.update({"answered": True, "answeredAt": "2000-01-01T00:00:00.000000Z", "answerSource": "main-agent-review",
+                                 "sourceUserMessageId": "🙂" * 200, "reviewedAt": "2000-01-01T00:00:00.000000Z"})
+            self.refresh_input_queue(projected_pet)
         serialized = json.dumps(projected, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode("utf-8")
         return len(serialized) + 1 <= MAX_QUESTION_STATE_BYTES
 
@@ -391,39 +627,44 @@ class Bridge:
             self.input_overflow(pet, "state_payload_budget", call_id, observed)
             return
         pet.update(candidate)
+        self.apply_deferred_input_replies(pet, call_id)
         if not pet.get("sourceUpdatedAt") or observed > pet["sourceUpdatedAt"]:
             pet["sourceUpdatedAt"] = observed
             pet["sourceStatus"] = "connected"
         self.changed = True
 
     def observe_input_reply(self, pet, item, observed):
-        """Only parse the exact app reply envelope on a validated root UserMessage.
+        """Parse exact envelopes in first-class text blocks, never prose substrings.
 
-        This is correlation evidence, not proof of user intent: the main agent must
-        still review the answer in Codex. No answer contents are copied into state.
+        A reply can arrive on another source shard before its question call. Retain
+        bounded identity/digest facts for later correlation, never answer contents.
         """
         content = item.get("content")
-        if not isinstance(content, list) or len(content) != 1 or not isinstance(content[0], dict) or content[0].get("type") != "text":
+        if not isinstance(content, list) or not observed or not isinstance(item.get("id"), str) or not 1 <= len(item["id"]) <= 200:
             return False
         if not isinstance(item.get("client_id"), str) or not item["client_id"]:
             return False
-        text = content[0].get("text")
-        if not isinstance(text, str) or len(text) > MAX_LINE_BYTES:
-            return False
-        text = text.strip()
         opening, closing = "<send_user_message_question_reply>", "</send_user_message_question_reply>"
-        if not text.startswith(opening) or not text.endswith(closing):
-            return False
-        try:
-            replies = json.loads(text[len(opening):-len(closing)].strip())
-        except ValueError:
-            return False
-        if not isinstance(replies, list) or not replies:
-            return False
-        if len(replies) > MAX_INPUT_ITEMS * MAX_PENDING_INPUT_CALLS:
-            self.input_overflow(pet, "too_many_reply_items")
-            return True
-        matched = False
+        replies = []
+        for block in content:
+            if not isinstance(block, dict) or block.get("type") != "text":
+                continue
+            text = block.get("text")
+            if not isinstance(text, str) or len(text) > MAX_LINE_BYTES:
+                continue
+            text = text.strip()
+            if not text.startswith(opening) or not text.endswith(closing):
+                continue
+            try:
+                parsed = json.loads(text[len(opening):-len(closing)].strip())
+            except ValueError:
+                continue
+            if isinstance(parsed, list):
+                replies.extend(parsed)
+            if len(replies) > MAX_INPUT_ITEMS * MAX_PENDING_INPUT_CALLS:
+                self.input_overflow(pet, "too_many_reply_items")
+                return True
+        recognized = False
         for reply in replies:
             if not isinstance(reply, dict) or set(reply) != {"questionItemId", "question", "answer"}:
                 continue
@@ -434,38 +675,65 @@ class Bridge:
             if not isinstance(identity, list) or len(identity) != 3 or identity[0] != "request_user_input_async":
                 continue
             call_id, index = identity[1:]
-            if not isinstance(call_id, str) or isinstance(index, bool) or not isinstance(index, int):
+            if not isinstance(call_id, str) or not re.fullmatch(r"call_[A-Za-z0-9_-]{1,80}", call_id) or isinstance(index, bool) or not isinstance(index, int) or not 0 <= index < MAX_INPUT_ITEMS:
                 continue
+            if not isinstance(reply["question"], str) or not isinstance(reply["answer"], str) or not reply["answer"].strip():
+                continue
+            recognized = True
+            fact = {"callId": call_id, "index": index, "questionDigest": hashlib.sha256(reply["question"].encode("utf-8")).hexdigest(),
+                    "observedAt": observed, "sourceUserMessageId": item["id"]}
             if call_id in pet.get("inputOverflowHistory", {}):
-                matched = True  # The original surface/main agent handles reconciliation.
                 continue
             call = pet.get("inputCallHistory", {}).get(call_id)
-            if not call or not observed or observed < call["observedAt"]:
+            if not call:
+                self.defer_input_reply(pet, fact)
                 continue
-            if call["status"] in TERMINAL_INPUT_STATUSES:
-                matched = True  # Late reply envelopes cannot reopen a terminal decision or its roadmap.
-                continue
-            if not 0 <= index < len(call["items"]):
-                continue
-            expected = call["items"][index]
-            if not isinstance(reply["question"], str):
-                continue
-            digest = hashlib.sha256(reply["question"].encode("utf-8")).hexdigest()
-            expected_digest = expected.get("questionDigest") or hashlib.sha256(expected["text"].encode("utf-8")).hexdigest()
-            if digest != expected_digest or not isinstance(reply["answer"], str) or not reply["answer"].strip():
-                continue
-            matched = True
-            if expected["answered"]:
-                continue
-            expected["answered"] = True
-            expected["answeredAt"] = observed
-            call["status"] = "awaiting_review" if all(question["answered"] for question in call["items"]) else "awaiting_reply"
-            self.refresh_input_queue(pet)
-            if not pet.get("sourceUpdatedAt") or observed > pet["sourceUpdatedAt"]:
-                pet["sourceUpdatedAt"] = observed
-                pet["sourceStatus"] = "connected"
-            self.changed = True
-        return matched
+            self.match_input_reply(pet, fact)
+        return recognized
+
+    def defer_input_reply(self, pet, fact):
+        if fact["observedAt"] < (pet.get("questionWatchStartedAt") or "") or fact["observedAt"] <= (pet.get("inputReplyPrunedBefore") or ""):
+            return
+        deferred = pet.setdefault("deferredInputReplies", [])
+        if any(entry["callId"] == fact["callId"] and entry["index"] == fact["index"] and entry["sourceUserMessageId"] == fact["sourceUserMessageId"] for entry in deferred):
+            return
+        if len(deferred) >= MAX_DEFERRED_INPUT_REPLIES:
+            # Keep a visible reconciliation gate if more delivery metadata arrives
+            # than can be retained. Do not pretend those replies were correlated.
+            self.input_overflow(pet, "deferred_reply_limit")
+            pet["inputReplyPrunedBefore"] = max(pet.get("inputReplyPrunedBefore") or "", fact["observedAt"])
+            return
+        deferred.append(fact)
+        self.changed = True
+
+    def match_input_reply(self, pet, fact):
+        call = pet.get("inputCallHistory", {}).get(fact["callId"])
+        if not call or call["status"] in TERMINAL_INPUT_STATUSES or fact["observedAt"] < call["observedAt"]:
+            return
+        index = fact["index"]
+        if not 0 <= index < len(call["items"]):
+            return
+        expected = call["items"][index]
+        expected_digest = expected.get("questionDigest") or hashlib.sha256(expected["text"].encode("utf-8")).hexdigest()
+        if fact["questionDigest"] != expected_digest or expected["answered"]:
+            return
+        expected.update({"answered": True, "answeredAt": fact["observedAt"], "answerSource": "question-card",
+                         "sourceUserMessageId": fact["sourceUserMessageId"]})
+        call["status"] = "awaiting_review" if all(question["answered"] for question in call["items"]) else "awaiting_reply"
+        self.refresh_input_queue(pet)
+        if not pet.get("sourceUpdatedAt") or fact["observedAt"] > pet["sourceUpdatedAt"]:
+            pet["sourceUpdatedAt"] = fact["observedAt"]
+            pet["sourceStatus"] = "connected"
+        self.changed = True
+
+    def apply_deferred_input_replies(self, pet, call_id):
+        remaining = []
+        for fact in pet.get("deferredInputReplies", []):
+            if fact["callId"] == call_id:
+                self.match_input_reply(pet, fact)
+            else:
+                remaining.append(fact)
+        pet["deferredInputReplies"] = remaining
 
     def classify_question(self, pet, classification):
         if not isinstance(classification, dict) or set(classification) != {"id", "purpose", "optional"} or classification.get("purpose") != "setup" or classification.get("optional") is not True:
@@ -570,6 +838,13 @@ class Bridge:
             raise BridgeError("A new integer report sequence is required; read status before reporting.")
         if "resolveQuestionId" in report and "cancelQuestionId" in report:
             raise BridgeError("Choose either resolveQuestionId or cancelQuestionId, not both.")
+        if "reviewFeedback" in report:
+            if "cancelQuestionId" in report:
+                raise BridgeError("Feedback review cannot be combined with cancellation.")
+            if "resolveQuestionId" not in report and set(report) - {"generation", "sequence", "reviewFeedback"}:
+                raise BridgeError("Feedback-only review cannot change phase, progress, or other report fields.")
+            if "resolveQuestionId" in report and not ("steps" in report and "currentStep" in report):
+                raise BridgeError("Resolving reviewed feedback requires the complete roadmap and currentStep.")
         if any(field in report for field in ("cancellationReason", "sourceUserMessageId")) and "cancelQuestionId" not in report:
             raise BridgeError("Cancellation metadata requires cancelQuestionId.")
         transition_id = report.get("resolveQuestionId", report.get("cancelQuestionId"))
@@ -577,6 +852,8 @@ class Bridge:
             if any(key in report for key in ("steps", "currentStep", "currentStepId", "planRevision")) or report.get("phase", "waiting") != "waiting":
                 raise BridgeError("Resolve the pending question by id before updating progress or continuing work.")
         updated = copy.deepcopy(pet)
+        if "reviewFeedback" in report:
+            self.review_feedback(updated, report["reviewFeedback"])
         if "classifyQuestion" in report:
             self.classify_question(updated, report["classifyQuestion"])
         # Preserve the last actual plan review across later phase-only reports.
@@ -632,9 +909,19 @@ class Bridge:
                 if current["origin"] == "codex-input-tool":
                     call = updated.get("inputCallHistory", {}).get(current.get("callId"))
                     if not call or call["status"] != "awaiting_review" or not all(item["answered"] for item in call["items"]):
-                        raise BridgeError("Every question in this tool call needs a correlated user reply before main-agent review can resolve it.")
-                    updated["inputCallHistory"][call["callId"]] = {"callId": call["callId"], "observedAt": call["observedAt"],
-                                                                   "status": "resolved", "resolvedAt": now_iso()}
+                        hint = "Every question in this tool call needs a correlated user reply or an explicitly verified chat answer before resolution."
+                        if updated.get("feedback"):
+                            hint += (" A user message is awaiting review: read it in Codex, then use reviewFeedback with this questionId, "
+                                     "feedback.sourceUserMessageId, and only the answeredItemIndexes you verified ([] for a non-answer). "
+                                     "See integrations/codex/pm-pet/references/report-contract.md#ordinary-chat-feedback.")
+                        raise BridgeError(hint)
+                    outcome = {"callId": call["callId"], "observedAt": call["observedAt"],
+                               "status": "resolved", "resolvedAt": now_iso()}
+                    reviewed_count = sum(item.get("answerSource") == "main-agent-review" for item in call["items"])
+                    if reviewed_count:
+                        outcome.update({"resolutionSource": "main-agent-review" if reviewed_count == len(call["items"]) else "mixed",
+                                        "reviewedItemCount": reviewed_count})
+                    updated["inputCallHistory"][call["callId"]] = outcome
                 else:
                     updated["questionOverflow"] = None
             updated["question"] = None
@@ -728,6 +1015,85 @@ class Bridge:
             result["pets"] = [pet for pet in result["pets"] if pet["id"] == validate_id(request.get("id"))]
         return result
 
+    def remember_turn_end(self, pet, turn_id, status, observed):
+        pending = pet.setdefault("pendingTurnEnds", [])
+        old = next((item for item in pending if item["turnId"] == turn_id), None)
+        if old and old["observedAt"] >= observed:
+            return
+        pending[:] = [item for item in pending if item["turnId"] != turn_id]
+        pending.append({"turnId": turn_id, "status": status, "observedAt": observed})
+        pending.sort(key=lambda item: (item["observedAt"], item["turnId"]))
+        del pending[:-MAX_PENDING_TURN_ENDS]
+        self.changed = True
+
+    def observe_turn_state(self, pet, event_type, payload, observed):
+        """Observe root turn activity separately from the report/question gate.
+
+        Report timestamps cannot hide a delayed lifecycle event. Turn identity and
+        this independent event clock keep old completions from overwriting newer
+        input or a newer turn; no lifecycle observation resolves a question.
+        """
+        statuses = {"task_started": "running", "task_complete": "ended",
+                    "turn_aborted": "interrupted", "user_message": "input_received"}
+        if not observed or event_type not in statuses:
+            return False
+        turn_id = payload.get("turn_id")
+        if turn_id is not None and (not isinstance(turn_id, str) or not turn_id.strip() or len(turn_id) > 200):
+            return False
+        current = pet.get("turnState") or {}
+        current_id, previous_at = current.get("turnId"), current.get("observedAt")
+        same_turn = bool(turn_id and current_id == turn_id)
+        # A new turn's start may be discovered after its user message on another
+        # shard. Matching identity lets that older start fill in running status.
+        delayed_start = event_type == "task_started" and same_turn and current.get("status") == "input_received"
+        if previous_at and observed < previous_at and not delayed_start:
+            return False
+        if event_type in ("task_complete", "turn_aborted"):
+            if current_id and turn_id != current_id:
+                if turn_id:
+                    self.remember_turn_end(pet, turn_id, statuses[event_type], observed)
+                return False
+            if current.get("status") == "input_received" and not same_turn:
+                if current_id is None and turn_id is None:
+                    # Legacy unscoped lifecycle can retain its existing phase
+                    # behavior, but cannot prove this new input's turn has ended.
+                    return True
+                if turn_id:
+                    self.remember_turn_end(pet, turn_id, statuses[event_type], observed)
+                return False
+        if event_type == "task_started":
+            if same_turn and current.get("status") in ("ended", "interrupted") and observed <= previous_at:
+                return False
+            if current_id and turn_id != current_id and previous_at and observed <= previous_at:
+                return False
+        if event_type == "user_message" and same_turn and current.get("status") in ("ended", "interrupted") and observed <= (current.get("inputObservedAt") or ""):
+            return False
+        status = statuses[event_type]
+        if event_type == "user_message" and current.get("status") == "running" and (same_turn or (turn_id is None and current_id is None)):
+            status = "running"
+        result = {"status": status, "observedAt": max(observed, previous_at or "")}
+        if turn_id:
+            result["turnId"] = turn_id
+        if event_type == "user_message":
+            result["inputObservedAt"] = observed
+        elif same_turn and current.get("inputObservedAt"):
+            result["inputObservedAt"] = current["inputObservedAt"]
+        # A matching end may already have arrived from another source shard.
+        # Apply it only after the current turn's identity is independently known.
+        pending = pet.get("pendingTurnEnds", [])
+        terminal = next((item for item in pending if item["turnId"] == turn_id and item["observedAt"] >= result["observedAt"]), None) if turn_id else None
+        if terminal:
+            result.update({"status": terminal["status"], "observedAt": terminal["observedAt"]})
+        if pending:
+            retained = [item for item in pending if item["observedAt"] > result["observedAt"]]
+            if retained != pending:
+                pet["pendingTurnEnds"] = retained
+                self.changed = True
+        if result != current:
+            pet["turnState"] = result
+            self.changed = True
+        return True
+
     def apply_event(self, pet, event):
         kind = event.get("type")
         payload = event.get("payload") or {}
@@ -743,25 +1109,26 @@ class Bridge:
             return
         if kind != "event_msg":
             return
+        if event_type in ("task_started", "task_complete", "turn_aborted"):
+            if not self.observe_turn_state(pet, event_type, payload, observed):
+                return
         if event_type == "token_count":
-            quota = quota_snapshot(payload.get("rate_limits"), observed)
-            if quota:
-                quota["sourceConversationId"] = pet["id"]
-            previous = timestamp(self.state["quota"].get("observedAt"))
-            if quota and (not previous or quota["observedAt"] > previous):
-                self.state["quota"] = quota
-                self.changed = True
+            self.observe_quota(pet, quota_snapshot(payload.get("rate_limits"), observed))
             return
         if event_type == "item_completed":
             item = payload.get("item") or {}
+            if event_owner == pet["id"]:
+                self.observe_quota(pet, desktop_quota_snapshot(item, observed))
             if isinstance(item, dict) and item.get("type") == "UserMessage":
                 # Only a first-class user item explicitly owned by this root binding qualifies.
                 # No message content, quoted tool output, or child message is interpreted.
                 request_id = item.get("id")
                 if event_owner != pet["id"] or not observed or not isinstance(request_id, str) or not request_id:
                     return
+                self.observe_turn_state(pet, "user_message", payload, observed)
                 if self.observe_input_reply(pet, item, observed):
                     return
+                self.observe_feedback_message(pet, item, observed)
                 previous_request = pet.get("requestObservedAt")
                 if request_id == pet.get("requestMessageId") or (previous_request and observed <= previous_request):
                     return
@@ -838,7 +1205,8 @@ class Bridge:
             conversation_id = pet["id"]
             binding = self.bindings.get(conversation_id, {})
             paths = [Path(path) for path in binding.get("paths", [])]
-            if clock - self.last_discovery.get(conversation_id, -1e9) >= 30:
+            discovery_interval = 2 if pet.get("question") else 30
+            if clock - self.last_discovery.get(conversation_id, -1e9) >= discovery_interval:
                 discovered = discover_transcripts(conversation_id, self.sessions_root)
                 paths = sorted(set(paths + discovered), key=lambda path: path.name)
                 self.last_discovery[conversation_id] = clock
@@ -898,6 +1266,8 @@ def serve(runtime, sessions_root=None):
         except BlockingIOError:
             raise BridgeError("A bridge is already running for this runtime.")
         bridge = Bridge(runtime, sessions_root)
+        from quota_reader import read_verified_codex_quota
+        scheduler = QuotaScheduler(read_verified_codex_quota)
         running = [True]
         def stop(_signal, _frame):
             running[0] = False
@@ -914,8 +1284,10 @@ def serve(runtime, sessions_root=None):
                 if current - last_poll >= 1:
                     bridge.poll_transcripts(current)
                     last_poll = current
+                bridge.poll_quota(scheduler)
                 time.sleep(0.1)
         finally:
+            scheduler.close()
             (runtime / "heartbeat.json").unlink(missing_ok=True)
 
 
