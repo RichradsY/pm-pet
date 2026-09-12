@@ -13,7 +13,7 @@ assert.equal(html.split(start).length, 2, 'Native view must expose one state blo
 assert.equal(html.split(end).length, 2, 'Native view must expose one state block');
 const source = html.split(start)[1].split(end)[0];
 const state = vm.runInNewContext(
-  `${source}\n({ attentionKind, questionState, setupDeferRequest, setupDeferralState, completedTransitions, roadmapState, compactRoadmap })`,
+  `${source}\n({ attentionKind, questionState, setupDeferRequest, setupDeferralState, completedTransitions, roadmapState, compactRoadmap, activity })`,
   {},
   { filename: 'native/Resources/pet.html:PET_STATE', timeout: 1000 }
 );
@@ -298,6 +298,96 @@ test('answering one item changes display identity to the next item within the sa
   assert.notEqual(before.key, after.key, 'The view must reset its question scroll for the next item');
   assert.equal(after.text, 'The second question', 'The active item wins over a stale aggregate text');
   assert.equal(after.canAnswer, true);
+  assert.equal(before.label, 'Question 1 of 2');
+  assert.equal(after.label, 'Question 2 of 2');
+  assert.equal(after.countLabel, '1 of 2 replies received');
+  assert.notEqual(before.actionableKey, after.actionableKey);
+  assert.match(before.replyHint, /question card or this Codex chat/);
+});
+
+test('an out-of-order correlated reply is acknowledged without changing the unanswered item', () => {
+  const before = pet({ question: automaticQuestion() });
+  const after = structuredClone(before);
+  after.question.items[1].answered = true;
+  const first = questionModel(before), next = questionModel(after);
+  assert.equal(next.text, 'The first question');
+  assert.equal(next.label, 'Question 1 of 2');
+  assert.equal(next.countLabel, '1 of 2 replies received');
+  assert.equal(next.answeredCount, 1);
+  assert.equal(next.actionableKey, first.actionableKey, 'No new item should reopen the panel');
+  assert.equal(next.key, first.key, 'Acknowledging another item should preserve question scroll');
+});
+
+const pendingFeedback = overrides => ({
+  questionId: 'input:synthetic-call', sourceUserMessageId: 'synthetic-message',
+  observedAt: '2026-01-01T12:00:00Z', status: 'pending_review', ...overrides
+});
+
+test('a correlated ordinary message is received for review without becoming an answer', () => {
+  const before = pet({ question: automaticQuestion() });
+  const after = { ...before, feedback: pendingFeedback(), roadmapNeedsUpdate: true };
+  const beforeJSON = JSON.stringify(before);
+  const result = questionModel(after);
+  assert.equal(result.reviewKind, 'message');
+  assert.equal(result.status, 'pending_review');
+  assert.equal(result.label, 'Message received');
+  assert.equal(result.countLabel, 'Question 1 of 2');
+  assert.equal(result.answeredCount, 0);
+  assert.match(result.reviewCopy, /whether your message answers this question/);
+  assert.equal(result.actionableKey, null, 'A candidate message must not trigger a new question popup');
+  assert.equal(result.attention, 'review');
+  assert.equal(result.canAnswer, false);
+  assert.equal(result.action, 'open_codex');
+  assert.equal(result.replyHint, '');
+  assert.equal(state.activity(after), 'idle', 'Review must not play nagging or fake-work animation');
+  assert.deepEqual(transitions(before, after), []);
+  assert.deepEqual(statuses(after), [['spec', 'done'], ['build', 'review'], ['verify', 'pending']]);
+  assert.equal(JSON.stringify(before), beforeJSON, 'Rendering must never acknowledge items itself');
+});
+
+test('unrelated or incomplete feedback cannot acknowledge the active question', () => {
+  const baseline = pet({ question: automaticQuestion() });
+  for (const feedback of [
+    pendingFeedback({ questionId: 'different-question' }),
+    pendingFeedback({ status: 'reviewed' }),
+    pendingFeedback({ sourceUserMessageId: '' }),
+    pendingFeedback({ sourceUserMessageId: null }),
+    null
+  ]) {
+    const snapshot = { ...baseline, feedback, sourceUpdatedAt: '2026-01-01T12:05:00Z', roadmapNeedsUpdate: true };
+    const result = questionModel(snapshot);
+    assert.equal(result.label, 'Question 1 of 2');
+    assert.equal(result.reviewing, false);
+    assert.equal(result.answeredCount, 0);
+    assert.equal(result.actionableKey, questionModel(baseline).actionableKey);
+    assert.equal(state.activity(snapshot), 'attention');
+  }
+  assert.equal(questionModel(pet({ feedback: pendingFeedback() })), null);
+});
+
+test('review that rejects a candidate restores the same question without inventing a reply', () => {
+  const original = pet({ question: automaticQuestion() });
+  const pending = { ...original, feedback: pendingFeedback() };
+  const rejected = { ...pending, feedback: null };
+  assert.equal(questionModel(pending).reviewing, true);
+  assert.equal(questionModel(rejected).actionableKey, questionModel(original).actionableKey);
+  assert.equal(questionModel(rejected).answeredCount, 0);
+  assert.equal(questionModel(rejected).countLabel, '');
+  assert.equal(questionModel(rejected).text, 'The first question');
+});
+
+test('explicit interpretation of a candidate advances only its reported answered items', () => {
+  const original = pet({ question: automaticQuestion() });
+  const interpreted = structuredClone(original);
+  interpreted.question.items[0].answered = true;
+  interpreted.feedback = null;
+  const result = questionModel(interpreted);
+  assert.equal(result.text, 'The second question');
+  assert.equal(result.label, 'Question 2 of 2');
+  assert.equal(result.countLabel, '1 of 2 replies received');
+  assert.notEqual(result.actionableKey, questionModel(original).actionableKey);
+  assert.equal(state.activity(interpreted), 'attention');
+  assert.deepEqual(transitions(original, interpreted), []);
 });
 
 test('ordinary updates and queue changes do not reset the current question scroll identity', () => {
@@ -328,6 +418,11 @@ test('an acknowledged reply awaits review without asking the user to answer agai
   const result = questionModel(after);
   assert.equal(result.status, 'awaiting_review');
   assert.equal(result.reviewing, true);
+  assert.equal(result.reviewKind, 'reply');
+  assert.equal(result.label, 'Reply received');
+  assert.equal(result.countLabel, '2 of 2 replies received');
+  assert.equal(result.actionableKey, null);
+  assert.equal(state.activity(after), 'idle');
   assert.equal(result.canAnswer, false);
   assert.equal(result.action, 'open_codex');
   assert.equal(result.attention, 'review');
@@ -336,6 +431,16 @@ test('an acknowledged reply awaits review without asking the user to answer agai
   assert.deepEqual(statuses(after), [['spec', 'done'], ['build', 'review'], ['verify', 'pending']]);
   assert.deepEqual(after.steps, before.steps, 'Reply review must not complete a delivery item');
   assert.deepEqual(transitions(before, after), [], 'Reply review must not celebrate a completion');
+});
+
+test('correlated reply review takes priority over an ordinary pending message', () => {
+  const snapshot = pet({ question: automaticQuestion({ status: 'awaiting_review' }), feedback: pendingFeedback() });
+  snapshot.question.items.forEach(item => { item.answered = true; });
+  const result = questionModel(snapshot);
+  assert.equal(result.reviewKind, 'reply');
+  assert.equal(result.label, 'Reply received');
+  assert.equal(result.answeredCount, 2);
+  assert.equal(result.countLabel, '2 of 2 replies received');
 });
 
 test('reviewing a reply hides instructions to supply input in a system window or terminal', () => {
@@ -398,6 +503,20 @@ test('reviewing an optional setup reply still waits for review and cannot be def
   assert.equal(result.canDefer, false);
   assert.equal(result.action, 'open_codex');
   assert.equal(deferRequest(optionalSetup({ status: 'awaiting_review' })), null);
+});
+
+test('an ordinary message candidate does not trap optional setup behind review', () => {
+  const snapshot = optionalSetup();
+  snapshot.feedback = pendingFeedback({ questionId: snapshot.question.id });
+  const result = questionModel(snapshot);
+  assert.equal(result.reviewKind, 'message');
+  assert.equal(result.label, 'Message received');
+  assert.equal(result.canDefer, true);
+  assert.equal(result.canAnswer, false);
+  assert.equal(result.action, 'open_codex');
+  assert.deepEqual(deferRequest(snapshot), {
+    action: 'deferSetup', questionId: snapshot.question.id, generation: snapshot.generation
+  });
 });
 
 test('a pending setup deferral ignores repeated clicks and mismatched acknowledgments', () => {

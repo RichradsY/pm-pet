@@ -228,6 +228,28 @@ final class PetSurface: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
     }
 }
 
+// A new unanswered item deserves one reminder, even within the same tool call.
+// Receipt/review states are not new requests for user action.
+func actionableQuestionIdentity(_ pet: [String: Any]) -> String? {
+    guard let question = pet["question"] as? [String: Any],
+          question["status"] as? String != "awaiting_review" else { return nil }
+    let questionID = question["id"] as? String ?? question["text"] as? String ?? ""
+    if let feedback = pet["feedback"] as? [String: Any],
+       feedback["status"] as? String == "pending_review",
+       feedback["questionId"] as? String == questionID,
+       let messageID = feedback["sourceUserMessageId"] as? String, !messageID.isEmpty { return nil }
+    let items = question["items"] as? [[String: Any]] ?? []
+    let offset = items.firstIndex { $0["answered"] as? Bool != true }
+    let item = offset.map { items[$0] }
+    var itemIndex: Any = NSNull()
+    if let offset = offset { itemIndex = items[offset]["index"] as? Int ?? offset }
+    let identity: [Any] = [pet["id"] ?? NSNull(), pet["generation"] ?? NSNull(), questionID,
+                           itemIndex,
+                           item?["questionItemId"] ?? NSNull()]
+    guard let encoded = try? JSONSerialization.data(withJSONObject: identity) else { return nil }
+    return String(data: encoded, encoding: .utf8)
+}
+
 final class PetWindowController {
     private static let topInset: CGFloat = 24
     let id: String
@@ -240,7 +262,7 @@ final class PetWindowController {
     private var dragMouse: NSPoint?
     private var hasPosition = false
     private var appliedPosition: NSPoint?
-    private var lastQuestionID: String?
+    private var lastActionableQuestionIdentity: String?
     private var panelHeight: CGFloat = 280
     var requestSetupDeferral: (([String: Any], @escaping (SetupDeferralOutcome) -> Void) -> Void)?
     private let send: ([String: Any]) -> Void
@@ -289,11 +311,12 @@ final class PetWindowController {
         owl.render(payload)
         panel.render(payload)
         let question = pet["question"] as? [String: Any]
-        let questionID = question?["id"] as? String ?? question?["text"] as? String
-        if let questionID = questionID, questionID != lastQuestionID {
-            showPanel(true)
+        if let identity = actionableQuestionIdentity(pet) {
+            if identity != lastActionableQuestionIdentity { showPanel(true) }
+            lastActionableQuestionIdentity = identity
+        } else if question == nil {
+            lastActionableQuestionIdentity = nil
         }
-        lastQuestionID = questionID
         layoutPanel()
         owl.window.orderFrontRegardless()
     }

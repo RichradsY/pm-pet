@@ -102,9 +102,11 @@ Roadmap dots use **green** for completed, **deep green** for current, **gray** f
 
 ### When Codex stops to ask
 
-**Waiting for your reply** stays visible even if Codex finishes its current turn and appears idle. Open the matching conversation and submit your answer on its question card. Opening the conversation alone does not answer it. For a plain-text question, reply in that conversation.
+**Waiting for your reply** stays visible even if Codex finishes its current turn and appears idle. Open the matching conversation and submit your answer on its question card or send it as a normal chat message. Opening the conversation alone does not submit a reply.
 
-After a matching card reply arrives, Pet shows **Reply received / Awaiting review**. The question stays pending until Codex reviews your answer and updates the roadmap; only then does this build continue. If you answered but the reminder still asks for a reply, tell Codex which question you answered so it can check the handoff.
+A normal chat message first shows **Message received / Awaiting review**. Codex checks which question it answers; unrelated messages leave the question open. A correlated card reply, or an explicitly verified chat answer, advances the question count. Partial answers show which question is still waiting.
+
+After all items are answered, Pet shows **Reply received / Awaiting review** with a calm owl. Codex reviews the answer's effect and updates the roadmap before continuing. The Pet reports message arrival and verified progress separately; receiving a message never means an automatic approval.
 
 ### About quota
 

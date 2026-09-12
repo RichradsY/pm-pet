@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Retain bounded reply metadata when replies arrive before their question shard, accept exact reply envelopes alongside other message blocks, and shorten shard discovery while waiting.
+- Acknowledge ordinary chat feedback without automatically treating it as an answer. Add scoped main-agent reconciliation, multi-question reply counts, and calm review states so users can see their input arrive before the roadmap changes.
+
 - Clarify waiting for a reply versus a finished Codex turn. Show where to submit an answer and distinguish a received reply awaiting review from a new request for input.
 
 ## 0.1.0-alpha.1 — 2026-09-12
