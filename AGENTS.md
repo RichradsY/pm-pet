@@ -12,3 +12,14 @@ When working as the owning main agent in this checkout, read `python3 scripts/pm
 - If the app is stopped or this conversation is not enabled, continue the task without launching or enabling it automatically.
 
 Child agents send findings to their parent and do not register main Pets or write the parent's overall roadmap. This rule applies only to this repository's development; it does not install a global Codex skill or enable other conversations.
+
+## Wait for feedback before building
+
+The user's policy for an enabled Pet is a whole-build wait at important unresolved product, UX, scope, time, or cost decisions and known required-information prompts. Apply it before delegating whenever possible.
+
+- Before asking, stop dispatching work for this build. Interrupt its running child agents using the runtime's collaboration controls, check their state, and stop or await owned background commands. Do not stop unrelated conversations or unowned processes. If an in-flight operation cannot be safely stopped, explain its actual state; do not claim a complete pause.
+- Ask the question in Codex and keep its Pet reminder pending. An asynchronous question tool returning `accepted` only means the question was delivered. After asking, do not edit, build, test, delegate, commit, or push while waiting. End the turn to await the user; use only the control/status operations needed to maintain the wait.
+- Silence, elapsed time, a tool finishing, a status-only user message, hiding/closing Pet, and restarting the app never count as an answer. Do not schedule an automatic continuation to bypass the wait.
+- After the user answers the actual pending question, review the consequences for completed work and future steps. Resolve the matching question with the full reviewed roadmap before resuming or delegating. If another consequential question remains, keep waiting and ask it first.
+
+This is the agent's workflow obligation. The local observer and a pending UI state do not themselves cancel running tools. The optional reviewed tool hook provides an additional guard only for supported future tool calls; retain honest execution-control capability labels.

@@ -29,9 +29,19 @@ Before delegating a build, surface unresolved user judgments that materially cha
 
 Also report known requests for required information or authentication with `question.kind: "input"` and the actual destination (`codex`, `system`, or `terminal`). This produces a red input reminder; decisions remain yellow. Link `question.stepId` and `currentStepId` to a pending plan item when possible. Do not guess that a password prompt exists from a command's wording or duration. System password windows are not automatically detected by this adapter. Keep credentials and answers out of Pet reports; the user completes the original prompt, then the main agent verifies completion and resolves the matching ID.
 
-The current adapter observes activity but does not enforce execution pause/resume. When a key decision is pending, stop dispatching work in that build and coordinate its child agents using available runtime tools. Do not claim that all agents are paused unless their state confirms it. Report the question even if pause control is unavailable, and state the limitation in the conversation. An unrelated conversation is unaffected.
+## Feedback is a build gate
 
-Resolve a reported question only after the user answers that question in Codex, using its matching question ID. Review the answer's effect on prior work and the roadmap before continuing. If review finds another material unresolved judgment, ask it rather than guessing. Disable, quit, tool cleanup, silence, and a finished turn are not answers.
+For an enabled Pet, an important unresolved question means this whole build waits for the user. Check for those decisions before delegating. Read Pet status before starting or resuming build work, including after compaction or restart.
+
+1. Stop dispatching new work for this build. Use the available collaboration interrupt controls for its running child agents, verify their returned state, and stop or await owned background commands. A message asking a child to pause is not proof it stopped. Do not interrupt unrelated conversations or unowned processes. Explain any in-flight operation that cannot be safely stopped.
+2. Ask in Codex and ensure the question is present in Pet. The current Desktop adapter recognizes the observed `request_user_input_async` format automatically; other tools, plain-text questions, and known system/terminal input prompts still need explicit reporting. Do not create both a manual reminder and an automatic reminder for the same question. Keep reports concise and store no answer values.
+3. An asynchronous question tool returning `accepted` only acknowledges delivery. After asking, stop editing, building, testing, delegating, committing, and publishing. End the turn so the user can answer. While waiting, use only the status and control actions required to maintain the wait. Do not use a timeout, repeated wake-up, default selection, or reminder dismissal as permission to continue.
+4. When a reply arrives, check that it answers the actual pending question; unrelated messages do not release it. Automatic questions keep `status: awaiting_review` after all question items are answered. The observer stores correlation metadata, not the answers; read answers in Codex and review their effect on existing work and the plan.
+5. Resolve the exact current question ID with a full `steps` and `currentStep` report. Read the result: another queued question can still keep the build waiting. Resume the main build and appropriate child tasks only after the pending questions are resolved. If review discovers another important decision, ask it first and keep waiting.
+
+The adapter enforces its progress/report gate but cannot cancel the model, already-running tools, or every child process. `executionControl` stays false. The optional reviewed PreToolUse hook adds a guard for supported subsequent local tools; it is not a claim that all runtime activity is frozen. Never describe a pending reminder alone as a confirmed pause. An unrelated conversation is unaffected.
+
+Disable, quit, tool cleanup, silence, and a finished turn are not answers. The user explicitly requested waiting until feedback, so this workflow must not be replaced by continuing independent build work after a blocking question.
 
 ## Current integration limits
 

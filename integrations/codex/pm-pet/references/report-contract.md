@@ -47,3 +47,16 @@ Only report that a prompt is pending when it is actually known. The current tran
 After the user answers and the agent reviews the impact, send the current generation and next sequence with `"resolveQuestionId":"signup-capacity"`, the revised steps if needed, and the appropriate phase/currentStep. Only an exact match clears the pending question; no tool cleanup or turn-end event clears it automatically.
 
 Use the same reporting helper from the owning main agent. Child agents send their findings back to that agent instead of updating the overall plan independently.
+
+## Automatically observed Desktop questions
+
+For the supported `request_user_input_async` format, ask in Codex without creating a duplicate manual reminder. The bridge uses the actual tool call ID and queues its question items. Inspect `status` for the generated question ID; do not guess it or manually use the reserved `input:` prefix.
+
+- `question.origin: "codex-input-tool"` identifies an observed input call. `question.items` contains item identity, question text, and whether a correlated reply arrived; it never includes answer values.
+- `question.status: "awaiting_reply"` means at least one item still needs a reply. `awaiting_review` means all items have matching replies but the main agent has not reviewed them yet. Both states keep the report gate closed.
+- `pendingQuestions` holds unresolved observed calls. Resolving the current one can reveal another. Check the accepted report's resulting state before resuming work.
+- To resolve an observed question, provide its exact `resolveQuestionId` plus full `steps` and `currentStep`. Every item must already have a correlated reply. Read the actual answers in Codex, review their impact, and report the resulting roadmap; merely possessing the ID is insufficient.
+- A correct resolution and a newly reported manual question may appear in one atomic report. If validation fails, the old question and state remain intact.
+- Restart and disable/re-enable preserve unresolved questions; completed call IDs are retained as replay protection. First adoption starts observing new input calls rather than reopening all historical questions.
+
+Follow the [feedback gate workflow](../../../../docs/FEEDBACK-GATE.md) for stopping child tasks and waiting. This report contract blocks progress updates while unresolved; it does not by itself interrupt runtime execution. Asynchronous delivery acknowledgements, timeout, and turn completion never resolve a question.

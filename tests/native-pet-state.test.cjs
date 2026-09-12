@@ -13,13 +13,14 @@ assert.equal(html.split(start).length, 2, 'Native view must expose one state blo
 assert.equal(html.split(end).length, 2, 'Native view must expose one state block');
 const source = html.split(start)[1].split(end)[0];
 const state = vm.runInNewContext(
-  `${source}\n({ attentionKind, completedTransitions, roadmapState, compactRoadmap })`,
+  `${source}\n({ attentionKind, questionState, completedTransitions, roadmapState, compactRoadmap })`,
   {},
   { filename: 'native/Resources/pet.html:PET_STATE', timeout: 1000 }
 );
 const plain = value => JSON.parse(JSON.stringify(value));
 const model = pet => plain(state.roadmapState(pet));
 const compact = pet => plain(state.compactRoadmap(pet));
+const questionModel = pet => plain(state.questionState(pet));
 const transitions = (previous, next) => plain(state.completedTransitions(previous, next));
 const step = (id, done = false, label = id) => ({ id, done, label });
 const pet = overrides => ({
@@ -250,6 +251,111 @@ test('state derivation leaves the reported roadmap and prior snapshot unchanged'
   const next = pet({ currentStepId: 'verify', question: { id: 'q', text: 'Choose a rule' } });
   const before = JSON.stringify([previous, next]);
   model(next);
+  questionModel(next);
   transitions(previous, next);
   assert.equal(JSON.stringify([previous, next]), before);
+});
+
+const automaticQuestion = overrides => ({
+  id: 'input:synthetic-call', origin: 'codex-input-tool', callId: 'synthetic-call',
+  kind: 'input', destination: 'codex', status: 'awaiting_reply',
+  text: 'The first question',
+  items: [
+    { index: 0, questionItemId: 'synthetic-item-a', text: 'The first question', answered: false },
+    { index: 1, questionItemId: 'synthetic-item-b', text: 'The second question', answered: false }
+  ],
+  ...overrides
+});
+
+test('question presentation is absent without an active question, even with a queued question', () => {
+  assert.equal(questionModel(pet({ pendingQuestions: [automaticQuestion()] })), null);
+});
+
+test('legacy questions still await a reply and retain their appropriate action', () => {
+  for (const [kind, destination, action] of [
+    ['decision', 'codex', 'answer'], ['input', 'codex', 'provide_info'],
+    ['input', 'system', 'open_codex'], ['input', 'terminal', 'open_codex']
+  ]) {
+    const result = questionModel(pet({ question: { id: 'legacy', text: 'A question', kind, destination } }));
+    assert.equal(result.status, 'awaiting_reply');
+    assert.equal(result.canAnswer, true);
+    assert.equal(result.reviewing, false);
+    assert.equal(result.action, action);
+    assert.equal(result.attention, kind);
+    assert.equal(result.itemIndex, null);
+  }
+});
+
+test('answering one item changes display identity to the next item within the same tool call', () => {
+  const first = pet({ question: automaticQuestion() });
+  const second = structuredClone(first);
+  second.question.items[0].answered = true;
+  second.question.items[0].answeredAt = '2026-01-01T12:00:00Z';
+  const before = questionModel(first), after = questionModel(second);
+  assert.equal(first.question.id, second.question.id);
+  assert.equal(before.itemIndex, 0);
+  assert.equal(after.itemIndex, 1);
+  assert.notEqual(before.key, after.key, 'The view must reset its question scroll for the next item');
+  assert.equal(after.text, 'The second question', 'The active item wins over a stale aggregate text');
+  assert.equal(after.canAnswer, true);
+});
+
+test('ordinary updates and queue changes do not reset the current question scroll identity', () => {
+  const before = pet({ question: automaticQuestion() });
+  const after = structuredClone(before);
+  after.sourceUpdatedAt = '2026-01-01T12:00:00Z';
+  after.pendingQuestions = [automaticQuestion({ id: 'input:another-call' })];
+  after.question.items[1].answeredAt = '2026-01-01T12:00:01Z';
+  assert.equal(questionModel(before).key, questionModel(after).key);
+});
+
+test('missing item IDs still distinguish successive questions by their item index', () => {
+  const before = pet({ question: automaticQuestion({ items: [
+    { index: 4, text: 'First item', answered: false },
+    { index: 5, text: 'Second item', answered: false }
+  ] }) });
+  const after = structuredClone(before);
+  after.question.items[0].answered = true;
+  assert.notEqual(questionModel(before).key, questionModel(after).key);
+  assert.equal(questionModel(after).itemIndex, 5);
+});
+
+test('an acknowledged reply awaits review without asking the user to answer again', () => {
+  const before = pet({ question: automaticQuestion() });
+  const after = structuredClone(before);
+  after.question.items.forEach(item => { item.answered = true; });
+  after.question.status = 'awaiting_review';
+  const result = questionModel(after);
+  assert.equal(result.status, 'awaiting_review');
+  assert.equal(result.reviewing, true);
+  assert.equal(result.canAnswer, false);
+  assert.equal(result.action, 'open_codex');
+  assert.equal(result.attention, 'review');
+  assert.equal(result.itemIndex, null);
+  assert.notEqual(result.key, questionModel(before).key);
+  assert.deepEqual(statuses(after), [['spec', 'done'], ['build', 'review'], ['verify', 'pending']]);
+  assert.deepEqual(after.steps, before.steps, 'Reply review must not complete a delivery item');
+  assert.deepEqual(transitions(before, after), [], 'Reply review must not celebrate a completion');
+});
+
+test('reviewing a reply hides instructions to supply input in a system window or terminal', () => {
+  for (const destination of ['system', 'terminal']) {
+    const before = pet({ question: automaticQuestion({ destination }) });
+    const after = pet({ question: automaticQuestion({ destination, status: 'awaiting_review' }) });
+    assert.equal(questionModel(before).showDestinationHint, true);
+    assert.equal(questionModel(after).showDestinationHint, false);
+    assert.equal(questionModel(after).action, 'open_codex');
+  }
+});
+
+test('reviewing a reply without pending delivery work has one review marker and no fabricated step', () => {
+  for (const steps of [[], [step('already-done', true)]]) {
+    const snapshot = pet({ steps, question: automaticQuestion({ status: 'awaiting_review' }) });
+    const result = compact(snapshot);
+    assert.equal(result.visible.length, 1);
+    assert.equal(result.visible[0].status, 'review');
+    assert.equal(result.visible[0].label, 'Reviewing reply');
+    assert.equal(result.visible[0].index, undefined);
+    assert.equal(model(snapshot).all.filter(item => item.status === 'current').length, 0);
+  }
 });

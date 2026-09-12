@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Automatically mirror observed Codex Desktop async question calls, preserve pending questions across restart, and require correlated replies plus a reviewed full roadmap before resolution. Show Reviewing reply without advancing progress; queue separate questions and support atomic question handoff.
+- Added a stop-before-asking agent workflow and an optional project-local PreToolUse feedback guard. The hook needs explicit Codex trust and live validation; it does not cancel in-flight work or establish full runtime pause control.
 - Keep pending questions and their reply action above progress and long roadmaps. New question IDs reset the panel to the top; ordinary refreshes preserve reading position. Long question text and expanded roadmaps scroll independently while the reply action stays visible.
 - Added a compact overhead roadmap with semantic state dots, current-step focus, overflow counts, and completion-synchronized orbit animation. Prompts remain visible even after a completed roadmap.
 - Added red required-information reminders alongside yellow decisions, linked to an optional pending step and original input destination. System password detection remains unavailable; input reminders require explicit agent reports.

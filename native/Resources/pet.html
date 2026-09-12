@@ -303,27 +303,48 @@ function dateText(value){const d=observedDate(value);return d?d.toLocaleDateStri
 function dateTooltip(value){return observedDate(value)?.toISOString()||'';}
 /* PET_STATE_START */
 function attentionKind(p){return p.question?(p.question.kind==='input'?'input':'decision'):null;}
+function questionState(p){
+ const question=p.question;if(!question)return null;
+ const reviewing=question.status==='awaiting_review';
+ const status=reviewing?'awaiting_review':'awaiting_reply';
+ const items=Array.isArray(question.items)?question.items:[];
+ const item=reviewing?null:items.find(item=>item&&item.answered!==true);
+ const itemIndex=item?(Number.isInteger(item.index)?item.index:items.indexOf(item)):null;
+ const itemID=item?.questionItemId??null;
+ const kind=attentionKind(p);
+ const destination=['codex','system','terminal'].includes(question.destination)?question.destination:'codex';
+ return {
+  key:JSON.stringify([p.id,p.generation,question.id,itemIndex,itemID,status]),
+  status,reviewing,kind,destination,itemIndex,
+  attention:reviewing?'review':kind,
+  text:item?.text||question.text||'',
+  canAnswer:!reviewing,
+  showDestinationHint:!reviewing&&kind==='input'&&destination!=='codex',
+  action:reviewing||kind==='input'&&destination!=='codex'?'open_codex':kind==='input'?'provide_info':'answer'
+ };
+}
 function completedTransitions(previous,next){
  if(!previous||previous.id!==next.id||previous.generation!==next.generation||next.question||next.roadmapNeedsUpdate)return [];
  const before=new Map((previous.steps||[]).map(step=>[step.id,step.done]));
  return (next.steps||[]).filter(step=>step.done&&before.get(step.id)===false).map(step=>step.id);
 }
 function roadmapState(p,limit=7){
+ const question=questionState(p);
  const steps=Array.isArray(p.steps)?p.steps:[];
  const pending=steps.filter(step=>!step.done);
  const candidate=pending.find(step=>step.id===p.currentStepId)||pending.find(step=>step.label===p.currentStep)||pending[0];
  const blocked=p.question?(pending.find(step=>step.id===p.question.stepId)||candidate):null;
  const working=['planning','building','running','checking'].includes(p.phase)&&!['disconnected','unavailable','error'].includes(p.sourceStatus);
  const current=!p.roadmapNeedsUpdate&&!p.question&&working?candidate:null;
- const all=steps.map((step,index)=>({...step,index,status:step.done?'done':step.id===blocked?.id?attentionKind(p):step.id===current?.id?'current':'pending'}));
+ const all=steps.map((step,index)=>({...step,index,status:step.done?'done':step.id===blocked?.id?question.attention:step.id===current?.id?'current':'pending'}));
  const focus=blocked||candidate;
  const focusIndex=focus?steps.findIndex(step=>step.id===focus.id):Math.max(0,steps.length-1);
  const start=Math.max(0,Math.min(focusIndex-Math.floor(limit/2),steps.length-limit));
  return {all,visible:all.slice(start,start+limit),before:start,after:Math.max(0,all.length-start-limit),reviewing:!!p.roadmapNeedsUpdate};
 }
 function compactRoadmap(p){
- const model=roadmapState(p),kind=attentionKind(p);
- if(kind&&!model.visible.some(step=>step.status===kind))return {...model,visible:[{id:'attention',label:p.question.text,status:kind}],before:0,after:0};
+ const model=roadmapState(p),question=questionState(p),kind=question?.attention;
+ if(kind&&!model.visible.some(step=>step.status===kind))return {...model,visible:[{id:'attention',label:question.reviewing?'Reviewing reply':question.text,status:kind}],before:0,after:0};
  if(model.reviewing&&!kind)return {...model,visible:[{id:'review',label:'Reviewing your new request',status:'review'}],before:0,after:0};
  return model;
 }
@@ -344,7 +365,7 @@ function renderMini(p,panelVisible){
  const items=model.visible;
  const signature=JSON.stringify([items,model.before,model.after,model.reviewing,kind]);
  if(signature===miniSignature)return;miniSignature=signature;row.replaceChildren();
- const names={done:'Completed',current:'In progress',pending:'Not started',decision:'Feedback needed',input:'Information needed',review:'Reviewing request'};
+ const names={done:'Completed',current:'In progress',pending:'Not started',decision:'Feedback needed',input:'Information needed',review:questionState(p)?.reviewing?'Reviewing reply':'Reviewing request'};
  function button(label,status,index,overflow){
   const b=document.createElement('button');b.type='button';b.className='mini-step'+(overflow?' mini-overflow':'');b.dataset.status=status;b.title=label+' · Open roadmap';b.setAttribute('aria-label',b.title);b.style.setProperty('--dot-index',index);
   if(overflow)b.textContent=overflow;else{const dot=document.createElement('span');dot.className='mini-dot';dot.setAttribute('aria-hidden','true');b.append(dot)}
@@ -442,12 +463,12 @@ window.renderPet=function(data){
  const colors=themes[p.theme]||themes.sage;root.style.setProperty('--pp-accent',colors[0]);root.style.setProperty('--pp-accent-bg',colors[1]);root.style.setProperty('--pp-fur','light-dark('+colors[2]+','+colors[3]+')');
  const scale=Math.max(.75,Math.min(1.5,(Number(p.size)||100)/100));const inset=Number(data.topInset)||24;owl.style.transform='scale('+scale+')';owl.style.top=(14+inset)+'px';$('.native-name').style.top=(104*scale+15+inset)+'px';
  $('.native-name').textContent=p.title||'Codex conversation';$('.native-name').title=p.title||'Codex conversation';
- const kind=attentionKind(p);owl.dataset.attention=kind||'';$('.native-needs').dataset.kind=kind||'';
- owl.setAttribute('aria-expanded',String(!!data.panelVisible));$('.native-needs').hidden=!kind||!data.panelVisible;text('.native-needs',kind==='input'?'Input needed':'Feedback needed');
+ const question=questionState(p),kind=question?.kind,attention=question?.attention;owl.dataset.attention=attention||'';$('.native-needs').dataset.kind=attention||'';
+ owl.setAttribute('aria-expanded',String(!!data.panelVisible));$('.native-needs').hidden=!kind||!data.panelVisible;text('.native-needs',question?.reviewing?'Reviewing reply':kind==='input'?'Input needed':'Feedback needed');
  renderMini(p,data.panelVisible);updateAnimation(p);renderChildren(p);quota(data.quota,p);
  text('.native-title',p.title||'Codex conversation');
  const reviewing=!!p.roadmapNeedsUpdate;
- text('.native-phase',kind==='input'?'Input needed':kind?'Feedback needed':reviewing?'Planning':({building:'Building',running:'Building',planning:'Planning',checking:'Checking',waiting:'Needs you',complete:'Complete',completed:'Complete',idle:'Idle',paused:'Paused',error:'Source error'}[p.phase]||'Connected'));
+ text('.native-phase',question?.reviewing?'Reviewing reply':kind==='input'?'Input needed':kind?'Feedback needed':reviewing?'Planning':({building:'Building',running:'Building',planning:'Planning',checking:'Checking',waiting:'Needs you',complete:'Complete',completed:'Complete',idle:'Idle',paused:'Paused',error:'Source error'}[p.phase]||'Connected'));
  text('.pp-title',reviewing?'Reviewing your new request':p.currentStep||'');$('.pp-title').hidden=!!kind||(!reviewing&&!p.currentStep);
  const progress=p.progress;const known=!reviewing&&progress&&Number.isFinite(progress.done)&&Number.isFinite(progress.total)&&progress.total>0;
  $('.native-no-plan').hidden=!!known;$('.pp-progress').hidden=!known;
@@ -455,11 +476,11 @@ window.renderPet=function(data){
  if(known){const percent=Math.round(Math.min(100,Math.max(0,100*progress.done/progress.total)));text('.pp-progress-count',progress.done+' of '+progress.total+' steps done');text('.pp-progress-percent',percent+'%');$('.pp-progress-fill').style.width=percent+'%';$('.pp-progress-track').setAttribute('aria-valuenow',String(percent));}
  const steps=Array.isArray(p.steps)?p.steps:[];$('.pp-road').hidden=!steps.length;text('.pp-road summary',reviewing?'Previous roadmap':'View roadmap');const ol=$('.pp-road ol');ol.replaceChildren();
  roadmapState(p).all.forEach(step=>{const li=document.createElement('li');li.className='pp-step';li.dataset.status=step.status;const mark=document.createElement('span');mark.className='pp-step-mark';mark.textContent=({done:'✓',current:'›',decision:'?',input:'!'})[step.status]||'○';const label=document.createElement('span');label.textContent=step.label||'';li.append(mark,label);ol.append(li)});
- $('.pp-question').hidden=!p.question;text('.pp-question p',p.question?.text||'');$('.pp-panel').dataset.waiting=String(!!p.question);$('.pp-panel').dataset.attention=kind||'';
- const destination=p.question?.destination||'codex';text('.pp-question-label',kind==='input'?'Information needed':'Your decision');
- $('.native-input-hint').hidden=kind!=='input'||destination==='codex';text('.native-input-hint',destination==='system'?'Input location · System window':'Input location · Terminal');
- text('.pp-return',kind==='input'?(destination==='codex'?'Provide info in Codex ↗':'Open Codex ↗'):'Answer in Codex ↗');
- const questionKey=p.question?JSON.stringify([p.id,p.generation,p.question.id]):null;
+ $('.pp-question').hidden=!question;text('.pp-question p',question?.reviewing?'Waiting for Codex to review your reply.':question?.text||'');$('.pp-panel').dataset.waiting=String(!!question);$('.pp-panel').dataset.attention=attention||'';
+ text('.pp-question-label',question?.reviewing?'Reviewing reply':kind==='input'?'Information needed':'Your decision');
+ $('.native-input-hint').hidden=!question?.showDestinationHint;text('.native-input-hint',question?.destination==='system'?'Input location · System window':'Input location · Terminal');
+ text('.pp-return',({open_codex:'Open Codex ↗',provide_info:'Provide info in Codex ↗',answer:'Answer in Codex ↗'})[question?.action]||'Open Codex ↗');
+ const questionKey=question?.key??null;
  if(questionKey&&questionKey!==displayedQuestionKey){$('.pp-panel').scrollTop=0;$('.pp-question p').scrollTop=0;$('.pp-road').scrollTop=0;}
  displayedQuestionKey=questionKey;
  const stamp=dateText(p.sourceUpdatedAt);const status=['disconnected','connecting'].includes(p.sourceStatus)?'Waiting for Codex':p.sourceStatus==='stale'?'Last reported state':['error','unavailable'].includes(p.sourceStatus)?'Source unavailable':['connected','reported'].includes(p.sourceStatus)?'From Codex':'Awaiting update';

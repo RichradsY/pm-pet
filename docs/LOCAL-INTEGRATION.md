@@ -42,12 +42,12 @@ python3 scripts/pm-pet.py doctor
 | Conversation ownership | Exact UUID plus validated session metadata; child sessions cannot create main Pets |
 | Run/turn activity | Read from that conversation's structured local events |
 | Roadmap and completion | Main-agent reports; a newly observed user request marks the previous roadmap as awaiting review until a full plan report arrives |
-| Important question | Explicit main-agent report with a stable question ID; answer stays in Codex |
+| Important question | Observed Desktop async input-tool calls are queued automatically; other question formats use explicit main-agent reports. Answers stay in Codex |
 | Required information | Explicit red input reminder with its original Codex/system/terminal destination; no password field or automatic OS-prompt detection |
-| Question resolution | Matching ID and current generation/sequence required |
+| Question resolution | Automatic questions require matching replies to every item, then main-agent resolution with a full reviewed roadmap; explicit prompts require owner verification and matching resolution ID |
 | Child activity | Observed start/completion events; repeated interaction alone is not proof of a resumed child |
 | Account quota | Recorded general `codex` snapshot from a bound conversation, with source timestamp; missing 5h remains absent |
-| Full-build pause/resume | Not enforced by this adapter; remains a separate integration capability |
+| Feedback wait | Persistent question/report gate plus an agent stop-before-asking workflow; optional trusted local-tool hook adds a guard. This observer cannot cancel already-running work |
 
 The default quota source is a cached observation. Reading the transcript again does not make the quota fresh. General account windows are kept separate from model-specific quota buckets.
 
@@ -69,7 +69,7 @@ Read `status`, write a payload using that Pet's generation and next sequence, th
 python3 scripts/pm-pet.py report --file /absolute/path/report.json
 ```
 
-The [report contract](../integrations/codex/pm-pet/references/report-contract.md) defines the fields. Only verified completion changes `done`; ordinary transcript activity never advances a roadmap item. A critical decision should be asked in Codex and reported to Pet. The current build reminds the user but cannot certify that every agent has stopped.
+The [report contract](../integrations/codex/pm-pet/references/report-contract.md) defines the fields. Only verified completion changes `done`; ordinary transcript activity never advances a roadmap item. Follow the [feedback gate](FEEDBACK-GATE.md): stop the same build's work before asking, wait for the actual answer, review its impact, and resolve the pending question before resuming. The current observer cannot independently certify that every agent has stopped.
 
 ## Validation and limits
 

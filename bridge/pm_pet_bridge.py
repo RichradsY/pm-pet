@@ -11,6 +11,7 @@ import argparse
 import copy
 from datetime import datetime, timezone
 import fcntl
+import hashlib
 import json
 import math
 import os
@@ -26,6 +27,9 @@ THEMES = ("sage", "sky", "lilac", "rose", "sand")
 MAX_PETS = 5
 MAX_REQUEST_BYTES = 128 * 1024
 MAX_LINE_BYTES = 16 * 1024 * 1024
+MAX_PENDING_INPUT_CALLS = 32
+MAX_INPUT_ITEMS = 32
+MAX_INPUT_TOMBSTONES = 256
 PHASES = {"idle", "planning", "building", "checking", "waiting", "complete", "paused", "error"}
 QUESTION_KINDS = {"decision", "input"}
 QUESTION_DESTINATIONS = {"codex", "system", "terminal"}
@@ -89,7 +93,7 @@ def ensure_runtime(runtime):
 def default_state():
     return {"schemaVersion": 1, "revision": 0, "pets": [],
             "quota": {"windows": {}, "observedAt": None, "source": "unavailable"},
-            "capabilities": {"executionControl": False, "automaticInputDetection": False}, "everEnabled": False}
+            "capabilities": {"executionControl": False, "automaticInputDetection": False, "automaticQuestionDetection": True}, "everEnabled": False}
 
 
 def checked_transcript(path, conversation_id):
@@ -211,7 +215,11 @@ class Bridge:
         self.state = read_json(self.state_path) if self.state_path.exists() else default_state()
         if self.state.get("schemaVersion") != 1:
             raise BridgeError("Unsupported runtime state version; use a separate runtime directory.")
-        self.state["capabilities"] = {"executionControl": False, "automaticInputDetection": False}
+        self.state["capabilities"] = {"executionControl": False, "automaticInputDetection": False, "automaticQuestionDetection": True}
+        for pet in self.state["pets"]:
+            pet.setdefault("inputCallHistory", {})
+            pet.setdefault("pendingQuestions", [])
+            pet.setdefault("questionWatchStartedAt", now_iso())
         self.bindings = read_json(self.bindings_path) if self.bindings_path.exists() else {}
         self.tails = {}
         self.last_discovery = {}
@@ -263,6 +271,9 @@ class Bridge:
         pet["enabled"] = True
         pet["sourceStatus"] = "connecting"
         pet["generation"] += 1
+        pet["questionWatchStartedAt"] = now_iso()
+        pet.setdefault("inputCallHistory", {})
+        pet.setdefault("pendingQuestions", [])
         used = {item["theme"] for item in self.state["pets"] if item["enabled"] and item["id"] != conversation_id}
         if pet["theme"] in used:
             pet["theme"] = next(candidate for candidate in THEMES if candidate not in used)
@@ -284,6 +295,138 @@ class Bridge:
         if not any(step["id"] == item_id and not step["done"] for step in steps):
             raise BridgeError("%s must reference an existing pending roadmap step." % field)
         return item_id
+
+    @staticmethod
+    def input_question(call):
+        pending = next((item for item in call["items"] if not item["answered"]), call["items"][0])
+        return {"id": "input:" + call["callId"], "text": pending["text"], "kind": "decision", "destination": "codex",
+                "origin": "codex-input-tool", "callId": call["callId"], "status": call["status"],
+                "items": copy.deepcopy(call["items"])}
+
+    def refresh_input_queue(self, pet):
+        history = pet.setdefault("inputCallHistory", {})
+        calls = sorted((call for call in history.values() if call["status"] != "resolved"), key=lambda call: (call["observedAt"], call["callId"]))
+        pet["pendingQuestions"] = [self.input_question(call) for call in calls]
+        if pet.get("questionOverflow"):
+            pet["pendingQuestions"].append(copy.deepcopy(pet["questionOverflow"]))
+        current = pet.get("question")
+        if current and current.get("origin") == "codex-input-tool":
+            call = history.get(current.get("callId"))
+            pet["question"] = self.input_question(call) if call and call["status"] != "resolved" else None
+        if not pet.get("question") and pet["pendingQuestions"]:
+            pet["question"] = copy.deepcopy(pet["pendingQuestions"][0])
+        if pet.get("question"):
+            pet["phase"] = "waiting"
+        tombstones = sorted((call for call in history.values() if call["status"] == "resolved"), key=lambda call: call["observedAt"])
+        for call in tombstones[:-MAX_INPUT_TOMBSTONES]:
+            pet["questionHistoryPrunedBefore"] = max(pet.get("questionHistoryPrunedBefore") or "", call["observedAt"])
+            del history[call["callId"]]
+
+    def input_overflow(self, pet, reason):
+        pet["questionOverflow"] = {"id": "input-queue-overflow", "text": "Review all pending questions in Codex; this question group exceeds the local display limit.",
+                                   "kind": "decision", "destination": "codex", "origin": "codex-input-limit", "status": "needs_reconciliation", "items": [], "reason": reason}
+        self.refresh_input_queue(pet)
+        self.changed = True
+
+    def observe_input_call(self, pet, payload, observed):
+        if payload.get("type") != "function_call" or payload.get("name") != "request_user_input_async" or not observed:
+            return
+        call_id = payload.get("call_id")
+        if not isinstance(call_id, str) or not re.fullmatch(r"call_[A-Za-z0-9_-]{1,80}", call_id):
+            return
+        history = pet.setdefault("inputCallHistory", {})
+        if call_id in history:
+            return
+        start = max(pet.get("questionWatchStartedAt") or now_iso(), pet.get("questionHistoryPrunedBefore") or "")
+        if observed < start or (pet.get("questionHistoryPrunedBefore") and observed <= pet["questionHistoryPrunedBefore"]):
+            return
+        try:
+            arguments = json.loads(payload.get("arguments", ""))
+        except (ValueError, TypeError):
+            return
+        questions = arguments.get("questions") if isinstance(arguments, dict) else None
+        if not isinstance(questions, list) or not questions:
+            return
+        if len(questions) > MAX_INPUT_ITEMS:
+            self.input_overflow(pet, "too_many_questions")
+            return
+        if any(not isinstance(question, dict) or not isinstance(question.get("title"), str) for question in questions):
+            return
+        if sum(1 for call in history.values() if call["status"] != "resolved") >= MAX_PENDING_INPUT_CALLS:
+            self.input_overflow(pet, "too_many_calls")
+            return
+        items = [{"index": index, "questionItemId": json.dumps(["request_user_input_async", call_id, index], separators=(",", ":")),
+                  "text": (question["title"][:1199] + "…" if len(question["title"]) > 1200 else question["title"]) or "A question in Codex needs your reply.",
+                  "questionDigest": hashlib.sha256(question["title"].encode("utf-8")).hexdigest(), "answered": False} for index, question in enumerate(questions)]
+        history[call_id] = {"callId": call_id, "observedAt": observed, "status": "awaiting_reply", "items": items}
+        self.refresh_input_queue(pet)
+        if not pet.get("sourceUpdatedAt") or observed > pet["sourceUpdatedAt"]:
+            pet["sourceUpdatedAt"] = observed
+            pet["sourceStatus"] = "connected"
+        self.changed = True
+
+    def observe_input_reply(self, pet, item, observed):
+        """Only parse the exact app reply envelope on a validated root UserMessage.
+
+        This is correlation evidence, not proof of user intent: the main agent must
+        still review the answer in Codex. No answer contents are copied into state.
+        """
+        content = item.get("content")
+        if not isinstance(content, list) or len(content) != 1 or not isinstance(content[0], dict) or content[0].get("type") != "text":
+            return False
+        if not isinstance(item.get("client_id"), str) or not item["client_id"]:
+            return False
+        text = content[0].get("text")
+        if not isinstance(text, str) or len(text) > MAX_LINE_BYTES:
+            return False
+        text = text.strip()
+        opening, closing = "<send_user_message_question_reply>", "</send_user_message_question_reply>"
+        if not text.startswith(opening) or not text.endswith(closing):
+            return False
+        try:
+            replies = json.loads(text[len(opening):-len(closing)].strip())
+        except ValueError:
+            return False
+        if not isinstance(replies, list) or not replies:
+            return False
+        if len(replies) > MAX_INPUT_ITEMS * MAX_PENDING_INPUT_CALLS:
+            self.input_overflow(pet, "too_many_reply_items")
+            return True
+        matched = False
+        for reply in replies:
+            if not isinstance(reply, dict) or set(reply) != {"questionItemId", "question", "answer"}:
+                continue
+            try:
+                identity = json.loads(reply["questionItemId"])
+            except (ValueError, TypeError):
+                continue
+            if not isinstance(identity, list) or len(identity) != 3 or identity[0] != "request_user_input_async":
+                continue
+            call_id, index = identity[1:]
+            if not isinstance(call_id, str) or isinstance(index, bool) or not isinstance(index, int):
+                continue
+            call = pet.get("inputCallHistory", {}).get(call_id)
+            if not call or call["status"] == "resolved" or not observed or observed < call["observedAt"] or not 0 <= index < len(call["items"]):
+                continue
+            expected = call["items"][index]
+            if not isinstance(reply["question"], str):
+                continue
+            digest = hashlib.sha256(reply["question"].encode("utf-8")).hexdigest()
+            expected_digest = expected.get("questionDigest") or hashlib.sha256(expected["text"].encode("utf-8")).hexdigest()
+            if digest != expected_digest or not isinstance(reply["answer"], str) or not reply["answer"].strip():
+                continue
+            matched = True
+            if expected["answered"]:
+                continue
+            expected["answered"] = True
+            expected["answeredAt"] = observed
+            call["status"] = "awaiting_review" if all(question["answered"] for question in call["items"]) else "awaiting_reply"
+            self.refresh_input_queue(pet)
+            if not pet.get("sourceUpdatedAt") or observed > pet["sourceUpdatedAt"]:
+                pet["sourceUpdatedAt"] = observed
+                pet["sourceStatus"] = "connected"
+            self.changed = True
+        return matched
 
     def preferences(self, request):
         pet = self.require_pet(validate_id(request.get("id")))
@@ -362,6 +505,24 @@ class Bridge:
             if report["phase"] not in PHASES:
                 raise BridgeError("Unknown phase.")
             updated["phase"] = report["phase"]
+        if "resolveQuestionId" in report:
+            current = updated.get("question")
+            if not current or current["id"] != report["resolveQuestionId"]:
+                raise BridgeError("Question resolution must match the pending question id.")
+            if current.get("origin") in ("codex-input-tool", "codex-input-limit"):
+                if not ("steps" in report and "currentStep" in report):
+                    raise BridgeError("Review the complete roadmap with steps and currentStep before resolving an observed question.")
+                if current["origin"] == "codex-input-tool":
+                    call = updated.get("inputCallHistory", {}).get(current.get("callId"))
+                    if not call or call["status"] != "awaiting_review" or not all(item["answered"] for item in call["items"]):
+                        raise BridgeError("Every question in this tool call needs a correlated user reply before main-agent review can resolve it.")
+                    updated["inputCallHistory"][call["callId"]] = {"callId": call["callId"], "observedAt": call["observedAt"],
+                                                                   "status": "resolved", "resolvedAt": now_iso()}
+                else:
+                    updated["questionOverflow"] = None
+            updated["question"] = None
+            if "phase" not in report:
+                updated["phase"] = "idle"
         if "question" in report:
             question = report["question"]
             if not isinstance(question, dict):
@@ -371,6 +532,10 @@ class Bridge:
             question_id = self.clean_text(question.get("id"), "question id", 100)
             if updated["question"] and updated["question"]["id"] != question_id:
                 raise BridgeError("Resolve the current question by id before replacing it.")
+            if updated["question"] and updated["question"].get("origin") == "codex-input-tool":
+                raise BridgeError("Observed tool questions cannot be overwritten by a manual question report.")
+            if question_id.startswith("input:") or question_id == "input-queue-overflow":
+                raise BridgeError("Observed input question ids are reserved for the transcript adapter.")
             kind = question.get("kind", "decision")
             destination = question.get("destination", "codex")
             if not isinstance(kind, str) or kind not in QUESTION_KINDS:
@@ -382,12 +547,7 @@ class Bridge:
             if "stepId" in question:
                 normalized["stepId"] = self.pending_step_id(question["stepId"], updated["steps"], "question stepId")
             updated["question"] = normalized
-        if "resolveQuestionId" in report:
-            if not updated["question"] or updated["question"]["id"] != report["resolveQuestionId"]:
-                raise BridgeError("Question resolution must match the pending question id.")
-            updated["question"] = None
-            if "phase" not in report:
-                updated["phase"] = "idle"
+        self.refresh_input_queue(updated)
         all_deliveries_done = bool(updated["steps"]) and all(step["done"] for step in updated["steps"])
         if report.get("phase") == "complete" and not all_deliveries_done:
             raise BridgeError("Completion requires a non-empty roadmap with every delivery item done.")
@@ -446,12 +606,17 @@ class Bridge:
     def apply_event(self, pet, event):
         kind = event.get("type")
         payload = event.get("payload") or {}
-        if not isinstance(payload, dict) or kind != "event_msg":
+        if not isinstance(payload, dict):
             return
         event_type = payload.get("type")
         observed = timestamp(event.get("timestamp"))
         event_owner = payload.get("thread_id")
         if event_owner and event_owner != pet["id"]:
+            return
+        if kind == "response_item":
+            self.observe_input_call(pet, payload, observed)
+            return
+        if kind != "event_msg":
             return
         if event_type == "token_count":
             quota = quota_snapshot(payload.get("rate_limits"), observed)
@@ -469,6 +634,8 @@ class Bridge:
                 # No message content, quoted tool output, or child message is interpreted.
                 request_id = item.get("id")
                 if event_owner != pet["id"] or not observed or not isinstance(request_id, str) or not request_id:
+                    return
+                if self.observe_input_reply(pet, item, observed):
                     return
                 previous_request = pet.get("requestObservedAt")
                 if request_id == pet.get("requestMessageId") or (previous_request and observed <= previous_request):
