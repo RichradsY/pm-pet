@@ -371,11 +371,21 @@ function quotaState(q,p,now=Date.now()){
  const ageLabel=minutes===null?'age unknown':minutes<1?'just now':minutes<60?minutes+'m ago':minutes<1440?Math.floor(minutes/60)+'h ago':Math.floor(minutes/1440)+'d ago';
  const stale=ageMs===null||ageMs>300000;
  const source=String(q?.source||'');
- const provenance=source==='codex-desktop-account'||source.includes('app-server')||source.includes('account')?'Account':source.includes('transcript')||source.includes('session')?'Chat':'Snapshot';
+ const provenance=source==='codex-cli-verified'?'Auto':source==='codex-desktop-account'||source.includes('app-server')||source.includes('account')?'Account':source.includes('transcript')||source.includes('session')?'Chat':'Snapshot';
  const observedAt=date?.toISOString()||null;
- const freshness=windows.length?'Remaining · '+(stale?'Cached':provenance)+' · '+ageLabel:'Waiting for usage';
- const tooltip=windows.length?'Remaining account quota. '+(stale?'Cached snapshot. ':'Recorded '+provenance.toLowerCase()+' snapshot. ')+(observedAt?'Observed '+observedAt+'. ':'Snapshot time unavailable. ')+'Ask Codex to check current usage.':'No quota snapshot is available. Ask Codex to check current usage.';
- return {visible:!!p.quotaVisible,windows,stale,ageMs,ageLabel,observedAt,provenance,freshness,tooltip};
+ const refresh=q?.refresh,refreshMode=['automatic','refreshing','paused','waiting_for_account','error'].includes(refresh?.mode)?refresh.mode:null;
+ const intervalSeconds=Number.isFinite(refresh?.intervalSeconds)&&refresh.intervalSeconds>0?refresh.intervalSeconds:null;
+ const nextAttemptAt=observedDate(refresh?.nextAttemptAt)?.toISOString()||null;
+ const errorCode=typeof refresh?.errorCode==='string'?refresh.errorCode:null;
+ const accountCheckNeeded=refreshMode==='waiting_for_account'||refreshMode==='error'&&['account_mismatch','account_changed','auth_metadata_unavailable','auth_required','invalid_fingerprint'].includes(errorCode);
+ const retryPending=refreshMode==='error'&&!accountCheckNeeded&&nextAttemptAt!==null;
+ const refreshLabel=accountCheckNeeded?'Account check':refreshMode==='error'?(retryPending?'Retry':'Check failed'):refreshMode==='refreshing'?'Checking':refreshMode==='paused'?'Paused':null;
+ const freshness=windows.length?'Remaining · '+(refreshLabel||(stale?'Cached':provenance))+' · '+ageLabel:accountCheckNeeded?'Account check needed':refreshMode==='refreshing'?'Checking usage':refreshMode==='paused'?'Usage checks paused':refreshMode==='error'?(retryPending?'Usage check failed · Retry pending':'Usage check failed'):'Waiting for usage';
+ const cadence=['automatic','refreshing','error'].includes(refreshMode)?intervalSeconds===60?'Checks every 60 seconds while working. ':intervalSeconds===300?'Checks every 5 minutes while idle. ':intervalSeconds!==null?'Checks every '+intervalSeconds+' seconds. ':refreshMode==='automatic'?'Automatic usage checks are enabled. ':'':'';
+ const refreshDetail=accountCheckNeeded?'Check current usage in Codex to verify the account match. ':refreshMode==='refreshing'?'A usage check is in progress. ':refreshMode==='paused'?'Automatic usage checks are paused. ':refreshMode==='error'?(retryPending?'The last usage check failed. Retry pending. ':'The last usage check failed; no retry is scheduled. '):'';
+ const reason=refreshMode==='error'?({account_mismatch:'The CLI account does not match the last Desktop account check. ',account_changed:'The account changed during the usage check. ',auth_metadata_unavailable:'Account metadata could not be checked. ',auth_required:'Sign in to Codex before checking usage. ',codex_not_found:'The Codex CLI could not be found. ',timeout:'The usage check timed out. ',rate_limited:'The usage check was rate limited. '}[errorCode]||''):'';
+ const tooltip=(windows.length?'Remaining account quota. '+(stale?'Cached snapshot. ':'Recorded snapshot. '):'No quota values are available. ')+(source==='codex-cli-verified'?'Codex CLI, matched to the last Desktop account check. ':'')+(observedAt?'Observed '+observedAt+'. ':windows.length?'Snapshot time unavailable. ':'')+cadence+refreshDetail+reason+(retryPending?'Next attempt '+nextAttemptAt+'. ':'')+'Ask Codex to check current usage.';
+ return {visible:!!p.quotaVisible,windows,stale,ageMs,ageLabel,observedAt,provenance,refreshMode,intervalSeconds,nextAttemptAt,accountCheckNeeded,retryPending,freshness,tooltip};
 }
 function attentionKind(p){return p.question?(p.question.kind==='input'?'input':'decision'):null;}
 function questionState(p){

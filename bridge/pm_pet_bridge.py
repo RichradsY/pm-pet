@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Local, explicit PM Pet control and a conservative Codex transcript observer.
 
-Python 3.9+, standard library only. No credentials, network calls, or Codex settings.
+Python 3.9+, standard library only. Verified quota reads use a short-lived
+read-only Codex App Server; no global Codex settings are changed.
 Transcript events are observations; this process never pauses or resumes agents.
 OS/terminal input prompts have no verified pending event in this adapter. Typed
 explicit reminders point back to their original surface; no input values are collected.
@@ -21,6 +22,11 @@ import signal
 import sys
 import time
 import uuid
+
+# The bridge is both a script and a dynamically loaded test module.
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+from quota_scheduler import QuotaScheduler
 
 
 THEMES = ("sage", "sky", "lilac", "rose", "sand")
@@ -269,6 +275,9 @@ def desktop_quota_snapshot(item, observed_at):
             limits = None
     snapshot = {"windows": {}, "observedAt": observed_at,
                 "source": "codex-desktop-account", "limitId": "codex"}
+    account_id = data.get("accountId")
+    if isinstance(account_id, str) and account_id and account_id == account_id.strip() and len(account_id) <= 512 and all(ord(char) >= 32 for char in account_id):
+        snapshot["accountFingerprint"] = hashlib.sha256(("pm-pet-account-v1:" + account_id).encode()).hexdigest()
     if limits is None:
         return snapshot
     if limits.get("limitId") not in (None, "codex") or not any(key in limits for key in ("primary", "secondary")):
@@ -328,11 +337,56 @@ class Bridge:
     def observe_quota(self, pet, snapshot):
         if snapshot is None:
             return
+        account_changed = False
+        if snapshot["source"] == "codex-desktop-account":
+            invalidated = timestamp(self.state["quota"].get("invalidatedDesktopThrough"))
+            if invalidated and snapshot["observedAt"] <= invalidated:
+                return
+            # Account evidence orders only against other Desktop evidence. A
+            # later CLI completion must not swallow a delayed account switch.
+            binding = self.state.get("quotaBinding") or {}
+            if not timestamp(binding.get("observedAt")) or snapshot["observedAt"] > timestamp(binding["observedAt"]):
+                fingerprint = snapshot.get("accountFingerprint")
+                account_changed = fingerprint != binding.get("fingerprint")
+                self.state["quotaBinding"] = {"fingerprint": fingerprint, "observedAt": snapshot["observedAt"],
+                                              "sourceConversationId": pet["id"]}
+                self.changed = True
+            elif snapshot.get("accountFingerprint") != binding.get("fingerprint"):
+                return
+        elif snapshot["source"] == "transcript" and (self.state.get("quotaBinding") or {}).get("fingerprint"):
+            # Unidentified token events cannot replace a matched account read.
+            return
         previous = timestamp(self.state["quota"].get("observedAt"))
-        if not previous or snapshot["observedAt"] > previous:
+        if account_changed or not previous or snapshot["observedAt"] > previous:
             snapshot["sourceConversationId"] = pet["id"]
+            if "refresh" in self.state["quota"]:
+                snapshot["refresh"] = self.state["quota"]["refresh"]
             self.state["quota"] = snapshot
             self.changed = True
+
+    def poll_quota(self, scheduler):
+        result, metadata = scheduler.tick(self.state["pets"], self.state.get("quotaBinding"))
+        binding = self.state.get("quotaBinding") or {}
+        if result and result.get("status") == "ok" and result.get("accountFingerprint") == binding.get("fingerprint"):
+            observed = timestamp(result.get("observedAt"))
+            previous = timestamp(self.state["quota"].get("observedAt"))
+            if observed and (not previous or observed > previous):
+                self.state["quota"] = {"windows": result.get("windows", {}), "observedAt": observed,
+                    "source": "codex-cli-verified", "limitId": result.get("selectedLimitId"),
+                    "accountFingerprint": binding["fingerprint"], "desktopVerifiedAt": binding["observedAt"]}
+                self.changed = True
+        elif result and result.get("errorCode") in ("account_mismatch", "account_changed", "auth_metadata_unavailable", "auth_required", "unsupported_account"):
+            # Preserve the Desktop event watermark across restart/replay even
+            # when the visible snapshot has been cleared after an auth failure.
+            invalidated = max(filter(None, (timestamp(binding.get("observedAt")),
+                timestamp(self.state["quota"].get("invalidatedDesktopThrough")))), default=None)
+            self.state["quota"] = {"windows": {}, "observedAt": None, "source": "unavailable",
+                                   "invalidatedDesktopThrough": invalidated}
+            self.changed = True
+        if self.state["quota"].get("refresh") != metadata:
+            self.state["quota"]["refresh"] = metadata
+            self.changed = True
+        self.publish()
 
     def pet(self, conversation_id):
         return next((pet for pet in self.state["pets"] if pet["id"] == conversation_id), None)
@@ -1212,6 +1266,8 @@ def serve(runtime, sessions_root=None):
         except BlockingIOError:
             raise BridgeError("A bridge is already running for this runtime.")
         bridge = Bridge(runtime, sessions_root)
+        from quota_reader import read_verified_codex_quota
+        scheduler = QuotaScheduler(read_verified_codex_quota)
         running = [True]
         def stop(_signal, _frame):
             running[0] = False
@@ -1228,8 +1284,10 @@ def serve(runtime, sessions_root=None):
                 if current - last_poll >= 1:
                     bridge.poll_transcripts(current)
                     last_poll = current
+                bridge.poll_quota(scheduler)
                 time.sleep(0.1)
         finally:
+            scheduler.close()
             (runtime / "heartbeat.json").unlink(missing_ok=True)
 
 

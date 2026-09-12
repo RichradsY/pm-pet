@@ -187,5 +187,52 @@ class DesktopQuotaTests(unittest.TestCase):
         self.assert_unchanged()
 
 
+    def poll_result(self, result):
+        class Scheduler:
+            def tick(inner, pets, binding):
+                return result, {"mode": "error" if result.get("errorCode") else "automatic"}
+        self.bridge.poll_quota(Scheduler())
+
+    def test_delayed_desktop_switch_has_independent_clock(self):
+        self.apply(self.event())
+        fingerprint = self.bridge.state["quotaBinding"]["fingerprint"]
+        self.poll_result({"status": "ok", "accountFingerprint": fingerprint,
+                          "observedAt": "2026-01-01T00:00:10Z", "windows": {}})
+        self.apply(self.event({"rateLimits": self.general(75), "accountId": "account-B"}, seconds=3))
+        self.assertEqual(self.bridge.state["quota"]["windows"]["week"]["remainingPercent"], 25)
+        self.assertNotEqual(self.bridge.state["quotaBinding"]["fingerprint"], fingerprint)
+        before = copy.deepcopy(self.bridge.state["quota"])
+        self.apply(self.event())
+        self.assertEqual(self.bridge.state["quota"], before)
+
+    def test_unknown_transcript_account_cannot_replace_binding(self):
+        self.apply(self.event())
+        before = copy.deepcopy(self.bridge.state["quota"])
+        self.bridge.observe_quota(self.pet, {"source": "transcript", "observedAt": "2026-01-01T00:00:10Z", "windows": {}})
+        self.assertEqual(self.bridge.state["quota"], before)
+
+    def test_transient_failure_preserves_real_age_and_pet_state(self):
+        self.apply(self.event())
+        before = copy.deepcopy(self.bridge.state["quota"])
+        pet = copy.deepcopy(self.pet)
+        self.poll_result({"status": "unavailable", "errorCode": "read_failed"})
+        for key, value in before.items():
+            self.assertEqual(self.bridge.state["quota"][key], value)
+        self.assertEqual(self.pet, pet)
+
+    def test_auth_failure_replay_cannot_resurrect_cleared_snapshot(self):
+        self.apply(self.event())
+        self.poll_result({"status": "unavailable", "errorCode": "account_mismatch"})
+        self.assertEqual(self.bridge.state["quota"]["windows"], {})
+        self.assertIsNone(self.bridge.state["quota"]["observedAt"])
+        self.apply(self.event())
+        self.assertEqual(self.bridge.state["quota"]["windows"], {})
+        restored = MODULE.Bridge(self.root / "runtime", self.sessions)
+        restored.apply_event(restored.pet(self.identity), self.event())
+        self.assertEqual(restored.state["quota"]["windows"], {})
+        self.apply(self.event(seconds=3))
+        self.assertEqual(self.bridge.state["quota"]["windows"]["week"]["remainingPercent"], 42)
+
+
 if __name__ == "__main__":
     unittest.main()

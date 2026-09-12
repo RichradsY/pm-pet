@@ -43,13 +43,13 @@ test('missing or invalid values remain unavailable, while a supplied zero is val
     const result = model(quota);
     assert.deepEqual(result.windows, []);
     assert.equal(result.freshness, 'Waiting for usage');
-    assert.match(result.tooltip, /No quota snapshot/);
+    assert.match(result.tooltip, /No quota values/);
   }
   assert.equal(model(fixture({ windows: { week: { remainingPercent: 0 } } })).windows[0].value, 0);
 });
 
 test('every source becomes clearly cached after five minutes, even authoritative account data', () => {
-  for (const source of ['codex-desktop-account', 'transcript', 'session', 'app-server', 'unknown']) {
+  for (const source of ['codex-desktop-account', 'codex-cli-verified', 'transcript', 'session', 'app-server', 'unknown']) {
     const quota = fixture({ source, observedAt: new Date(now).toISOString() });
     assert.equal(model(quota, now + 300000).stale, false);
     const aged = model(quota, now + 300001);
@@ -91,6 +91,74 @@ test('epoch seconds and milliseconds preserve timestamp provenance; a new snapsh
   assert.equal(model(current).stale, false);
   assert.equal(model(current).windows[0].value, 42);
   assert.equal(model(current, now, false).visible, false);
+});
+
+test('verified automatic source names the last Desktop match and the actual polling interval', () => {
+  for (const [intervalSeconds, cadence] of [[60, /every 60 seconds while working/], [300, /every 5 minutes while idle/], [120, /every 120 seconds/]]) {
+    const quota = fixture({ source: 'codex-cli-verified', refresh: { mode: 'automatic', intervalSeconds, nextAttemptAt: '2026-01-01T12:01:00Z' } });
+    const result = model(quota);
+    assert.equal(result.provenance, 'Auto');
+    assert.equal(result.freshness, 'Remaining · Auto · 1m ago');
+    assert.match(result.tooltip, /Codex CLI, matched to the last Desktop account check/);
+    assert.match(result.tooltip, cadence);
+    assert.doesNotMatch(result.tooltip, /permanent|live/i);
+    assert.deepEqual(result.windows, model(fixture()).windows);
+  }
+});
+
+test('refreshing and paused states keep the last observed quota age and value', () => {
+  for (const [mode, label] of [['refreshing', 'Checking'], ['paused', 'Paused']]) {
+    const result = model(fixture({ source: 'codex-cli-verified', observedAt: '2026-01-01T11:52:00Z', refresh: { mode, intervalSeconds: mode === 'paused' ? null : 60, nextAttemptAt: null } }));
+    assert.equal(result.freshness, `Remaining · ${label} · 8m ago`);
+    assert.equal(result.stale, true);
+    assert.equal(result.windows[0].value, 47);
+    assert.equal(result.observedAt, '2026-01-01T11:52:00.000Z');
+    assert.match(result.tooltip, mode === 'paused' ? /checks are paused/ : /check is in progress/);
+    if (mode === 'paused') assert.doesNotMatch(result.tooltip, /Checks every/);
+  }
+});
+
+test('a transport failure shows retry only when the bridge actually schedules one', () => {
+  const refresh = { mode: 'error', intervalSeconds: 60, nextAttemptAt: '2026-01-01T12:01:00Z', lastAttemptAt: '2026-01-01T12:00:00Z', errorCode: 'timeout' };
+  const quota = fixture({ source: 'codex-cli-verified', observedAt: '2026-01-01T11:52:00Z', refresh });
+  const saved = JSON.stringify(quota);
+  const scheduled = model(quota);
+  assert.equal(scheduled.freshness, 'Remaining · Retry · 8m ago');
+  assert.equal(scheduled.retryPending, true);
+  assert.equal(scheduled.stale, true);
+  assert.match(scheduled.tooltip, /Cached snapshot/);
+  assert.match(scheduled.tooltip, /timed out/);
+  assert.match(scheduled.tooltip, /Next attempt 2026-01-01T12:01:00.000Z/);
+  assert.equal(model(quota, now + 60000).ageLabel, '9m ago', 'A failed attempt must not refresh the snapshot timestamp');
+  const unscheduled = model({ ...quota, refresh: { ...refresh, nextAttemptAt: null } });
+  assert.equal(unscheduled.freshness, 'Remaining · Check failed · 8m ago');
+  assert.equal(unscheduled.retryPending, false);
+  assert.match(unscheduled.tooltip, /no retry is scheduled/);
+  assert.equal(JSON.stringify(quota), saved);
+});
+
+test('account verification failures and waiting states remain unavailable without imaginary quota', () => {
+  for (const refresh of [
+    { mode: 'waiting_for_account', intervalSeconds: null, nextAttemptAt: null },
+    ...['account_mismatch', 'auth_metadata_unavailable', 'auth_required', 'account_changed'].map(errorCode => ({ mode: 'error', intervalSeconds: null, nextAttemptAt: null, errorCode }))
+  ]) {
+    const result = model(fixture({ windows: {}, observedAt: null, refresh }));
+    assert.deepEqual(result.windows, []);
+    assert.equal(result.accountCheckNeeded, true);
+    assert.equal(result.freshness, 'Account check needed');
+    assert.equal(result.retryPending, false);
+    assert.match(result.tooltip, /Check current usage in Codex/);
+    assert.doesNotMatch(result.tooltip, /Checks every|Retry pending/);
+  }
+  assert.equal(model(fixture({ windows: {}, refresh: { mode: 'error', errorCode: 'server_unavailable', nextAttemptAt: '2026-01-01T12:01:00Z' } })).freshness, 'Usage check failed · Retry pending');
+});
+
+test('unrecognized refresh data does not claim a schedule or leak raw error details', () => {
+  const result = model(fixture({ refresh: { mode: 'unknown', intervalSeconds: '60', nextAttemptAt: 'invalid', errorCode: 'untrusted raw details' } }));
+  assert.equal(result.refreshMode, null);
+  assert.equal(result.intervalSeconds, null);
+  assert.equal(result.freshness, 'Remaining · Account · 1m ago');
+  assert.doesNotMatch(result.tooltip, /every|untrusted raw details/);
 });
 
 // Run the shipped view/timer code against a tiny in-memory DOM. This verifies
@@ -183,4 +251,24 @@ test('unavailable quota and the hidden panel surface do not run redundant clocks
   assert.equal(owl.timers.size, 0);
   const panel = viewHarness('panel'); panel.render(fixture());
   assert.equal(panel.timers.size, 0);
+});
+
+test('refresh-only view updates change status without rewriting figures or resetting their age', () => {
+  const view = viewHarness();
+  const quota = fixture({ source: 'codex-cli-verified', refresh: { mode: 'automatic', intervalSeconds: 60 } });
+  view.render(quota);
+  const pill = view.row.querySelector('.pp-usage-pill');
+  assert.equal(view.freshness.textContent, 'Remaining · Auto · 1m ago');
+  view.render({ ...quota, refresh: { mode: 'error', errorCode: 'timeout', intervalSeconds: 60, nextAttemptAt: '2026-01-01T12:01:00Z', lastAttemptAt: '2026-01-01T12:00:00Z' } });
+  assert.equal(view.row.querySelector('.pp-usage-pill'), pill);
+  assert.equal(pill.children[1].textContent, '47%');
+  assert.equal(view.freshness.textContent, 'Remaining · Retry · 1m ago');
+  assert.match(pill.title, /matched to the last Desktop account check/);
+  assert.match(view.freshness.title, /timed out/);
+  assert.equal(view.timers.size, 1);
+  view.render({ windows: {}, observedAt: null, refresh: { mode: 'waiting_for_account', intervalSeconds: null } });
+  assert.equal(view.row.hidden, true);
+  assert.equal(view.unavailable.hidden, false);
+  assert.equal(view.freshness.textContent, 'Account check needed');
+  assert.equal(view.timers.size, 0);
 });
