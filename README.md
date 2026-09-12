@@ -18,7 +18,7 @@ Building with an agent is still a collaboration. You bring the context, prioriti
 - **Human input at meaningful moments.** A yellow lantern draws attention to an important decision. A red reminder points to required information. Answer in the original Codex conversation or input window.
 - **A little life on your desktop.** The owl reads while work is underway, casts a spell when a step completes, and gains chicks when child agents appear.
 - **Quota within reach.** Optional usage pills show the remaining quota windows your account actually supplies, including weekly-only accounts.
-- **One conversation, one Pet.** Enable up to five independent Pets, with different colors and their own roadmaps. Two tasks in the same project stay separate.
+- **One conversation, one Pet.** Enable up to five independent Pets, with different colors, editable names, and their own roadmaps. Two tasks in the same project stay separate.
 
 ## How it works
 
@@ -92,13 +92,16 @@ Uninstall preserves the checkout and Pet's local data by default. See [removal o
 | --- | --- |
 | Click the owl | Show or hide its progress panel |
 | Double-click the owl | Return to its exact Codex conversation |
+| Double-click the Pet name or progress header name | Edit the Pet's display name |
 | Drag the owl | Move it on your desktop |
 | Click a roadmap dot | Open the full roadmap |
-| Pet menu | Resize, restore hidden quota, or disable this Pet |
+| Pet menu | Rename, resize, restore hidden quota, or disable this Pet |
 | **Open Codex to reply** | Return to the conversation to answer |
 | **Not now** | Defer an explicitly optional setup step |
 
 Roadmap dots use **green** for completed, **deep green** for current, **gray** for pending, **yellow** for a decision, and **red** for required information. Labels identify the states too. Pet supports 75%–150% size presets and respects reduced motion and reduced transparency.
+
+To rename a Pet, double-click its name or choose **Rename Pet…** from its menu. You can also focus the name and press Enter or F2. Enter or leaving the field saves; Esc cancels. Names must contain 1–100 characters and persist across restarts. Renaming a Pet does not change the Codex conversation's title or identity. If saving fails or cannot be confirmed, the editor keeps your draft and shows a message.
 
 ### When Codex stops to ask
 

@@ -196,7 +196,14 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent
 #pm-pet-desktop .pp-pet:focus-visible{outline:2px solid var(--pp-accent)}
 #pm-pet-desktop .native-name,#pm-pet-desktop .native-quota .pp-usage-row,#pm-pet-desktop .native-quota .pp-unavailable,#pm-pet-desktop .pp-panel{background:var(--pp-glass-wash);border:1px solid var(--pp-glass-edge);box-shadow:inset 0 1px 0 var(--pp-glass-highlight),0 3px 8px var(--pp-glass-shadow)}
 #pm-pet-desktop .native-name{position:absolute;left:50%;transform:translateX(-50%);width:max-content;max-width:calc(100% - 20px);text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;top:120px;font-size:11px;line-height:16px;padding:2px 9px;border-radius:10px;color:var(--pp-ink)}
-#pm-pet-desktop .native-name::before{content:"";display:inline-block;width:5px;height:5px;margin:0 5px 1px 0;border-radius:50%;background:var(--pp-accent)}
+#pm-pet-desktop .native-name-label::before{content:"";display:inline-block;width:5px;height:5px;margin:0 5px 1px 0;border-radius:50%;background:var(--pp-accent)}
+#pm-pet-desktop .native-name-label{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;cursor:text;user-select:none}
+#pm-pet-desktop .native-name-label:focus-visible{outline:1px solid var(--pp-accent);outline-offset:-1px;border-radius:5px}
+#pm-pet-desktop .native-name[data-editing=true]{width:calc(100% - 20px);white-space:normal;padding:5px 8px;border-color:var(--pp-accent);border-radius:9px}
+#pm-pet-desktop .native-name-input{display:block;width:100%;min-width:0;border:0;border-radius:3px;background:transparent;color:var(--pp-ink);font:inherit;font-size:12px;line-height:18px;text-align:start;outline:none;user-select:text}
+#pm-pet-desktop .native-name-input[aria-invalid=true]{box-shadow:inset 0 -1px light-dark(#953b31,#ffb6a7)}
+#pm-pet-desktop .native-name-hint{display:block;font-size:10px;line-height:13px;color:var(--pp-muted);margin-top:3px;text-align:start;overflow-wrap:anywhere}
+#pm-pet-desktop .native-title{cursor:text}
 #pm-pet-desktop .native-needs{position:absolute;z-index:3;top:6px;left:50%;transform:translateX(-50%);font-size:10px;white-space:nowrap;background:light-dark(#fff0ca8c,#49371699);color:light-dark(#654410,#ffe3a3);border:1px solid light-dark(#d99c4033,#efc36d40);border-radius:12px;padding:1px 7px;cursor:pointer}
 #pm-pet-desktop .native-needs[data-kind=input]{background:light-dark(#ffe5de99,#512e2b99);color:light-dark(#953b31,#ffb6a7);border-color:light-dark(#c7523e38,#f28d7d40)}
 #pm-pet-desktop .native-needs[data-kind=review]{background:var(--pp-glass-wash);color:var(--pp-muted);border-color:var(--pp-glass-edge)}
@@ -286,7 +293,7 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent
     <span class="pp-baby" data-agent="one" data-phase="none" aria-hidden="true" hidden><span class="pp-chick"><span class="pp-chick-eyes"></span><span class="pp-chick-beak"></span><span class="pp-chick-wing"></span><span class="pp-chick-wing pp-right"></span><span class="pp-chick-feet"></span></span><span class="pp-shell pp-shell-top"></span><span class="pp-shell pp-shell-bottom"></span><span class="pp-baby-done">✓</span></span>
     <span class="pp-baby" data-agent="two" data-phase="none" aria-hidden="true" hidden><span class="pp-chick"><span class="pp-chick-eyes"></span><span class="pp-chick-beak"></span><span class="pp-chick-wing"></span><span class="pp-chick-wing pp-right"></span><span class="pp-chick-feet"></span></span><span class="pp-shell pp-shell-top"></span><span class="pp-shell pp-shell-bottom"></span><span class="pp-baby-done">✓</span></span>
 </button>
-<div class="native-name">Codex conversation</div>
+<div class="native-name"><span class="native-name-label" role="button" tabindex="0" aria-label="Rename Pet. Double-click or press Enter.">Codex conversation</span><input class="native-name-input" type="text" aria-label="Pet name" aria-describedby="pet-name-hint" autocomplete="off" spellcheck="false" dir="auto" hidden><span class="native-name-hint" id="pet-name-hint" role="status" hidden></span></div>
 <div class="native-quota" hidden><div class="pp-usage-row"></div><div class="pp-unavailable" hidden><span>Usage unavailable</span><button class="native-quota-close" aria-label="Hide usage">×</button></div><div class="native-freshness"></div></div>
 </section>
 <section data-surface="panel" hidden><div class="pp-panel" role="region" aria-label="Build progress">
@@ -308,6 +315,41 @@ const send=body=>window.webkit?.messageHandlers?.pet?.postMessage(body);
 const owl=$('.pp-pet');
 const themes={sage:['#638f7c','#e1eee5','#80a88f','#86ad95'],sky:['#628faf','#deebf5','#83a4bd','#8faec5'],lilac:['#9b7baf','#efe6f6','#aa92b7','#b49fc0'],rose:['#b27889','#f6e4e9','#c38e8c','#c99b99'],sand:['#aa8960','#f3eada','#b89a72','#c7a981']};
 let priorPet=null,magicTimer=null,currentPet=null,clickTimer=null,miniSignature='',displayedQuestionKey=null;
+const nameBox=$('.native-name'),nameLabel=$('.native-name-label'),nameInput=$('.native-name-input'),nameHint=$('.native-name-hint');
+let editingName=false,savingName=false,composingName=false;
+function renderName(title){nameLabel.textContent=title;nameLabel.title=title+' · Double-click to rename';nameLabel.setAttribute('aria-label',title+'. Rename Pet. Double-click or press Enter.');text('.native-title',title);$('.native-title').title='Double-click to rename Pet';}
+function nameFeedback(message,invalid=false){nameHint.textContent=message;nameInput.setAttribute('aria-invalid',String(invalid));measure();}
+window.beginNameEdit=function(){
+ if(surface!=='owl'||editingName)return;
+ editingName=true;nameBox.dataset.editing='true';nameLabel.hidden=true;nameInput.hidden=false;nameHint.hidden=false;
+ nameInput.value=currentPet?.title||'Codex conversation';nameFeedback('Enter to save · Esc to cancel');nameInput.focus();nameInput.select();measure();
+};
+function endNameEdit(){
+ if(savingName)return;
+ editingName=false;composingName=false;nameBox.dataset.editing='false';nameInput.hidden=true;nameHint.hidden=true;nameLabel.hidden=false;
+ renderName(currentPet?.title||'Codex conversation');send({action:'endNameEdit'});measure();
+}
+function saveName(){
+ if(!editingName||savingName||composingName)return;
+ const title=nameInput.value.trim();
+ if(!title||Array.from(title).length>100){nameFeedback(!title?'Enter a name.':'Use 100 characters or fewer.',true);return;}
+ if(title===currentPet?.title){endNameEdit();return;}
+ savingName=true;nameInput.readOnly=true;nameInput.setAttribute('aria-busy','true');nameFeedback('Saving…');send({action:'saveName',title});
+}
+window.finishNameSave=function(result){
+ if(!savingName)return;
+ savingName=false;nameInput.readOnly=false;nameInput.removeAttribute('aria-busy');
+ if(result.ok){currentPet={...currentPet,title:result.title};endNameEdit();}
+ else{nameFeedback(result.error||'Could not save the name. Please try again.',true);}
+};
+nameLabel.addEventListener('dblclick',e=>{e.preventDefault();e.stopPropagation();send({action:'beginNameEdit'});});
+$('.native-title').addEventListener('dblclick',e=>{e.preventDefault();send({action:'beginNameEdit'});});
+nameLabel.addEventListener('keydown',e=>{if(['Enter',' ','F2'].includes(e.key)){e.preventDefault();send({action:'beginNameEdit'});}});
+nameInput.addEventListener('keydown',e=>{e.stopPropagation();if(e.isComposing||e.keyCode===229||composingName)return;if(e.key==='Enter'){e.preventDefault();saveName();}else if(e.key==='Escape'){e.preventDefault();endNameEdit();}});
+nameInput.addEventListener('compositionstart',()=>{composingName=true;});
+nameInput.addEventListener('compositionend',()=>{composingName=false;if(document.activeElement!==nameInput)saveName();});
+nameInput.addEventListener('input',()=>{if(!savingName)nameFeedback('Enter to save · Esc to cancel');});
+nameInput.addEventListener('blur',saveName);
 const childSlots=Array.from(root.querySelectorAll('.pp-baby'),el=>({el,id:null,timer:null,remaining:0,startedAt:0,complete:null}));
 let childrenPaused=false;
 function text(selector,value){const el=$(selector),next=String(value??'');if(el.textContent!==next)el.textContent=next;}
@@ -548,7 +590,7 @@ window.renderPet=function(data){
  const p=data.pet||{};currentPet=p;
  const colors=themes[p.theme]||themes.sage;root.style.setProperty('--pp-accent',colors[0]);root.style.setProperty('--pp-accent-bg',colors[1]);root.style.setProperty('--pp-fur','light-dark('+colors[2]+','+colors[3]+')');
  const scale=Math.max(.75,Math.min(1.5,(Number(p.size)||100)/100));const inset=Number(data.topInset)||24;owl.style.transform='scale('+scale+')';owl.style.top=(14+inset)+'px';$('.native-name').style.top=(104*scale+15+inset)+'px';
- $('.native-name').textContent=p.title||'Codex conversation';$('.native-name').title=p.title||'Codex conversation';
+ renderName(p.title||'Codex conversation');
  const question=questionState(p),kind=question?.kind,attention=question?.attention;owl.dataset.attention=attention||'';$('.native-needs').dataset.kind=attention||'';
  owl.setAttribute('aria-expanded',String(!!data.panelVisible));$('.native-needs').hidden=!kind||!data.panelVisible;text('.native-needs',question?.reviewing?'Awaiting review':question?.setup?'Setup needed':kind==='input'?'Input needed':'Waiting for you');
  renderMini(p,data.panelVisible);updateAnimation(p);renderChildren(p);quota(data.quota,p);
@@ -586,6 +628,6 @@ owl.addEventListener('pointerup',e=>{if(!start)return;send({action:'dragEnd'});s
 owl.addEventListener('pointercancel',()=>{if(start)send({action:'dragEnd'});start=null;});
 owl.addEventListener('dblclick',e=>{e.preventDefault();clearTimeout(clickTimer);send({action:'openConversation'});});
 owl.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();send({action:'togglePanel'});}});
-root.addEventListener('contextmenu',e=>{e.preventDefault();send({action:'menu'});});
+root.addEventListener('contextmenu',e=>{if(e.target===nameInput)return;e.preventDefault();send({action:'menu'});});
 })();
 </script></body></html>

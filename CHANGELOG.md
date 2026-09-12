@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Rename each Pet from its name or menu, with inline editing, keyboard and IME support, confirmed saves, and persistent display names independent of the Codex conversation title.
 - Show **Turn ended** from actual Codex turn events and clear that state on new input, while keeping unanswered questions and delivery progress independent.
 - Retain bounded reply metadata when replies arrive before their question shard, accept exact reply envelopes alongside other message blocks, and shorten shard discovery while waiting.
 - Acknowledge ordinary chat feedback without automatically treating it as an answer. Add scoped main-agent reconciliation, multi-question reply counts, and calm review states so users can see their input arrive before the roadmap changes.

@@ -28,6 +28,7 @@ python3 scripts/pm-pet.py doctor
 ```
 
 - Click the owl to show/hide progress. Double-click or use its menu to return to the exact Codex conversation.
+- Double-click the name beneath the owl or in the progress header to edit the Pet's display name. Enter or leaving the field saves; Esc cancels. Names must contain 1–100 characters. You can also focus the name and press Enter/F2, or choose **Rename Pet…** from its menu. Saving is acknowledged by the local bridge; names persist across restarts and do not rename the Codex conversation.
 - With progress hidden, the overhead dots show completed (green), current (deep green), pending (gray), decision (yellow), and required-input (red) states. Click a dot for the full roadmap; `+N` keeps long plans compact. Real completion makes the dots briefly orbit alongside the owl's spell.
 - Drag the owl, or use the app menu for size, per-Pet usage display, and disable.
 - Up to five main Pets can be enabled. Child agents appear under their parent and do not consume these slots.
